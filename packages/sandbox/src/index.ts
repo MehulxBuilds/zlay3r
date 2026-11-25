@@ -47,6 +47,8 @@ export interface SandboxProvider {
   service<T>(id: string, action: Record<string, unknown>): Promise<T>;
 }
 
+// We can have multiple sandbox providers in the future like ( docker, microVM, etc ), but for now we only have one.
+
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly docker: Docker;
   constructor(socketPath = env.DOCKER_SOCKET) {
