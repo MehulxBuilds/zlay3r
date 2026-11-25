@@ -1,7 +1,7 @@
 import { bodySchema } from "../../lib/route-schema";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { db, and, eq, sql, approval } from "@repo/db";
+import { db, and, eq, sql, approval, desc } from "@repo/db";
 import { authorize } from "../platform/authorization";
 import { HttpError } from "../../lib/errors";
 import type { SandboxProvider } from "@repo/sandbox";
@@ -16,6 +16,7 @@ export async function registerApprovalsRoutes(
       .select()
       .from(approval)
       .where(eq(approval.organizationId, request.user.organizationId))
+      .orderBy(desc(approval.createdAt))
       .limit(100);
   });
   app.post(

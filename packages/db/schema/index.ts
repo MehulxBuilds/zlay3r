@@ -392,6 +392,7 @@ export const approval = pgTable("approval", {
   action: jsonb("action").notNull(),
   status: text("status").notNull().default("PENDING"),
   decidedBy: text("decided_by").references(() => user.id),
+  createdAt: timestamp("created_at", { mode: "date", precision: 3 }).defaultNow(),
   expiresAt: timestamp("expires_at", { mode: "date", precision: 3 }).notNull(),
 });
 
