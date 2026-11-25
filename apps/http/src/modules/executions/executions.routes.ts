@@ -129,6 +129,10 @@ export async function registerExecutionsRoutes(
           "execute_command",
           { command: input.command, options: input.options },
           input.sandboxId,
+          undefined,
+          // Session-authenticated users explicitly submit commands here.
+          // API keys retain the normal approval policy for automation.
+          { userApproved: request.apiScopes === undefined },
         );
         if (!decision.allowed)
           throw new HttpError(409, decision.reason!, {

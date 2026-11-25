@@ -88,6 +88,10 @@ export async function registerFilesystemRoutes(
             : "write_file",
         input,
         id,
+        undefined,
+        // Submitting a file operation in the app is explicit user approval.
+        // Automated API-key requests still follow the approval policy.
+        { userApproved: request.apiScopes === undefined },
       );
       if (!decision.allowed)
         throw new HttpError(409, decision.reason!, {

@@ -9,6 +9,7 @@ export async function evaluateAction(
   args: Record<string, unknown>,
   sandboxId: string,
   runId?: string,
+  options: { userApproved?: boolean } = {},
 ) {
   return db.transaction(async (tx) => {
     const [policy] = await tx
@@ -24,7 +25,8 @@ export async function evaluateAction(
       !policy.allowedCommands.includes(String(args.command))
     )
       return { allowed: false, reason: "COMMAND_NOT_ALLOWED" };
-    if (!policy.requireApproval.includes(tool)) return { allowed: true };
+    if (options.userApproved || !policy.requireApproval.includes(tool))
+      return { allowed: true };
     const action = { tool, args, sandboxId, runId: runId ?? null };
     const actionHash = tokenDigest(JSON.stringify(action));
     await tx.execute(
