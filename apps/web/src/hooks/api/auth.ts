@@ -68,10 +68,13 @@ export function useSignOut() {
     mutationFn: () => client.logout(),
     onError: (error) =>
       useWorkspaceStore.getState().setMutationError(errorMessage(error)),
-    onSuccess: () => {
-      queries.clear();
-      useWorkspaceStore.getState().reset();
+    onSuccess: async () => {
+      await queries.cancelQueries();
       queries.setQueryData(["auth"], null);
+      queries.removeQueries({
+        predicate: (query) => query.queryKey[0] !== "auth",
+      });
+      useWorkspaceStore.getState().reset();
       toast.success("Signed out");
     },
   });
