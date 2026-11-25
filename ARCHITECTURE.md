@@ -17,6 +17,7 @@ API and worker scripts run on Node through `tsx` for Docker Desktop named-pipe c
 | `apps/worker`                          | Outbox delivery, execution claims, leases and reconciliation |
 | `apps/web/src/components`              | Pixel dashboard, settings and workspace controls             |
 | `packages/agent-runtime`               | Provider adapters, model router, tool registry and MCP       |
+| `packages/agent-runner`                | Credential-free agent loop executed inside the sandbox       |
 | `packages/sandbox`                     | Docker lifecycle and bounded execution bridge                |
 | `packages/sandbox/image`               | Non-root shell/filesystem/browser/MCP helper source          |
 | `packages/storage`                     | Private R2 objects, checksums, metadata and signed downloads |
@@ -32,6 +33,13 @@ Run creation, quota reservations, initial event, optional session message and an
 outbox record share a PostgreSQL transaction. The outbox publisher submits a
 stable BullMQ job ID and retries delivery. A worker claims only queued records,
 sets a lease, and fences writes with lease owner and attempt number.
+
+The worker starts the agent runner inside the assigned sandbox through a private
+Docker exec channel. It holds provider credentials and brokers model/tool access;
+the agent loop, message assembly and tool selection run in the sandbox. Per-sandbox
+claims serialize agent runs across workers. Checkpoints and usage counters are
+validated and persisted by the supervisor, never accepted as billing authority
+from the runner. See [sandbox agents](docs/sandbox-agents.md).
 
 The runtime preserves provider tool-call IDs and native Anthropic content. Tools
 validate JSON schemas and arguments, then apply organization policy, captured
@@ -67,5 +75,7 @@ cleans abandoned resources, and callers must account for uncertain outcomes.
 See [environment setup](env/README.md), [HTTP contracts](apps/http/README.md),
 [SDK usage](packages/sdk/README.md) and [security boundaries](SECURITY.md).
 No install, startup, build or verification command applies schemas or generates
-migrations. Application deployment, monitoring infrastructure and new integration
-or failure testing are deferred by request.
+migrations. Agent subprocess, MCP and isolated Docker smoke tests are implemented;
+live provider, database/queue recovery and adversarial integration acceptance remain
+separate from these checks. Application deployment and monitoring infrastructure
+are deferred.

@@ -12,3 +12,13 @@ LICENSE
 documentation
 scripts
 tests
+env/.env*
+.env*
+.codex
+.agents
+.aws
+**/.env*
+**/node_modules
+**/.next
+**/.turbo
+**/dist

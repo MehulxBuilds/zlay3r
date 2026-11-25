@@ -1,4 +1,5 @@
-import { Queue, Worker } from "bullmq";
+import { runSandboxAgent } from "./agent-supervisor";
+import { DelayedError, Queue, Worker } from "bullmq";
 import IORedis from "ioredis";
 import { randomUUID } from "node:crypto";
 import {
@@ -37,7 +38,6 @@ import {
 import { server_env as env } from "@repo/env";
 import { DockerSandboxProvider } from "@repo/sandbox";
 import {
-  AgentRuntime,
   ModelRouter,
   AnthropicProvider,
   OpenAIProvider,
@@ -172,7 +172,7 @@ async function router(organizationId: string, primary: string) {
 
 const worker = new Worker<RunJob>(
   "agent-runs",
-  async (job) =>
+  async (job, token) =>
     withCarrier(job.data.trace ?? {}, () =>
       span(
         "worker.execution",
@@ -185,8 +185,29 @@ const worker = new Worker<RunJob>(
           const where = and(
             eq(agentRun.id, runId),
             eq(agentRun.organizationId, organizationId),
+            eq(agentRun.sandboxId, job.data.sandboxId),
           );
+          let sandboxBusy = false;
           const [run] = await db.transaction(async (tx) => {
+            await tx.execute(
+              sql`SELECT pg_advisory_xact_lock(hashtext(${`agent-sandbox:${organizationId}:${job.data.sandboxId}`}))`,
+            );
+            const [active] = await tx
+              .select({ id: agentRun.id })
+              .from(agentRun)
+              .where(
+                and(
+                  eq(agentRun.organizationId, organizationId),
+                  eq(agentRun.sandboxId, job.data.sandboxId),
+                  eq(agentRun.status, "RUNNING"),
+                  sql`${agentRun.id} <> ${runId}`,
+                ),
+              )
+              .limit(1);
+            if (active) {
+              sandboxBusy = true;
+              return [];
+            }
             const records = await tx
               .update(agentRun)
               .set({
@@ -206,6 +227,10 @@ const worker = new Worker<RunJob>(
               });
             return records;
           });
+          if (sandboxBusy) {
+            await job.moveToDelayed(Date.now() + 3000, token);
+            throw new DelayedError();
+          }
           if (!run) return;
           withCarrier(job.data.trace ?? {}, () =>
             recordQueueWait(new Date(job.timestamp), runId),
@@ -224,7 +249,13 @@ const worker = new Worker<RunJob>(
               const [current] = await db
                 .update(agentRun)
                 .set({ leaseExpiresAt: new Date(Date.now() + 45000) })
-                .where(and(fence, eq(agentRun.status, "RUNNING")))
+                .where(
+                  and(
+                    fence,
+                    eq(agentRun.status, "RUNNING"),
+                    sql`${agentRun.leaseExpiresAt} > now()`,
+                  ),
+                )
                 .returning();
               if (!current) controller.abort(new Error("LEASE_LOST"));
               else if (current.cancelRequestedAt)
@@ -495,56 +526,93 @@ const worker = new Worker<RunJob>(
                 )
                 .map((tool) => tool.name),
             );
-            const runtime = new AgentRuntime(
-              provider,
-              await router(organizationId, run.provider),
-              registry,
-            );
             const result = await span(
               "agent.execution",
               {
                 "run.id": runId,
                 "organization.id": organizationId,
                 attempt: run.attempt,
+                "agent.location": "sandbox",
               },
-              () =>
-                runtime.run({
-                  sandboxId: box.resourceId!,
-                  task: run.task,
-                  provider: run.provider as ProviderName,
-                  model: run.model ?? undefined,
-                  messages:
-                    state?.messages ??
-                    (history.length
-                      ? [
-                          {
-                            role: "system" as const,
-                            content:
-                              run.systemInstructions ??
-                              "Work only in /workspace. Use tools within the execution policy.",
-                          },
-                          ...history.map((entry) => ({
-                            role: entry.role as "user" | "assistant",
-                            content:
-                              typeof entry.content === "string"
-                                ? entry.content
-                                : JSON.stringify(entry.content),
-                          })),
-                        ]
-                      : undefined),
-                  systemInstructions: run.systemInstructions ?? undefined,
-                  previousUsage: state?.usage,
-                  maxTokens: policy.maxTokens,
-                  maxToolCalls: policy.maxToolCalls,
-                  deadlineMs: policy.deadlineMs,
+              async () =>
+                runSandboxAgent({
+                  provider,
+                  resourceId: box.resourceId!,
+                  launch: {
+                    tools: registry.metadata(),
+                    input: {
+                      sandboxId: box.resourceId!,
+                      task: run.task,
+                      provider: run.provider as ProviderName,
+                      model: run.model ?? undefined,
+                      messages:
+                        state?.messages ??
+                        (history.length
+                          ? [
+                              {
+                                role: "system" as const,
+                                content:
+                                  run.systemInstructions ??
+                                  "Work only in /workspace. Use tools within the execution policy.",
+                              },
+                              ...history.map((entry) => ({
+                                role: entry.role as "user" | "assistant",
+                                content:
+                                  typeof entry.content === "string"
+                                    ? entry.content
+                                    : JSON.stringify(entry.content),
+                              })),
+                            ]
+                          : undefined),
+                      systemInstructions: run.systemInstructions ?? undefined,
+                      previousUsage: state?.usage,
+                      maxTokens: policy.maxTokens,
+                      maxToolCalls: policy.maxToolCalls,
+                      deadlineMs: policy.deadlineMs,
+                    },
+                  },
+                  registry,
+                  model: await router(organizationId, run.provider),
                   signal: controller.signal,
+                  async assertActive() {
+                    controller.signal.throwIfAborted();
+                    const [current] = await db
+                      .select({ cancelRequestedAt: agentRun.cancelRequestedAt })
+                      .from(agentRun)
+                      .where(and(fence, eq(agentRun.status, "RUNNING")))
+                      .limit(1);
+                    if (!current) throw new Error("LEASE_LOST");
+                    if (current.cancelRequestedAt)
+                      throw new Error("RUN_CANCELLED");
+                  },
                   emit,
                   async checkpoint(messages, usage) {
                     controller.signal.throwIfAborted();
-                    await db.insert(checkpoint).values({
-                      runId,
-                      state: { messages, usage },
-                      sequence: messages.length,
+                    await db.transaction(async (tx) => {
+                      const [current] = await tx
+                        .select({
+                          cancelRequestedAt: agentRun.cancelRequestedAt,
+                        })
+                        .from(agentRun)
+                        .where(
+                          and(
+                            fence,
+                            eq(agentRun.status, "RUNNING"),
+                            sql`${agentRun.leaseExpiresAt} > now()`,
+                          ),
+                        )
+                        .for("update")
+                        .limit(1);
+                      if (!current) throw new Error("LEASE_LOST");
+                      if (current.cancelRequestedAt)
+                        throw new Error("RUN_CANCELLED");
+                      await tx
+                        .insert(checkpoint)
+                        .values({
+                          runId,
+                          state: { messages, usage },
+                          sequence: messages?.length ?? 0,
+                        });
                     });
                   },
                   async authorize(tool, args) {
@@ -626,13 +694,25 @@ const worker = new Worker<RunJob>(
             return result;
           } catch (error) {
             const reason =
-              error instanceof Error ? error.message : "RUN_FAILED";
+              error instanceof Error && error.name === "TimeoutError"
+                ? "AGENT_DEADLINE_EXCEEDED"
+                : error instanceof Error
+                  ? error.message
+                  : "RUN_FAILED";
             const status =
               reason === "APPROVAL_REQUIRED"
                 ? "AWAITING_APPROVAL"
                 : reason === "RUN_CANCELLED"
                   ? "CANCELLED"
-                  : controller.signal.aborted
+                  : controller.signal.aborted ||
+                      [
+                        "LEASE_LOST",
+                        "LEASE_UNAVAILABLE",
+                        "AGENT_CHANNEL_CLOSED",
+                        "AGENT_INTERRUPTED",
+                        "AGENT_TRANSPORT_FAILED",
+                        "AGENT_DEADLINE_EXCEEDED",
+                      ].includes(reason)
                     ? "INTERRUPTED"
                     : "FAILED";
             const safeError = /^[A-Z_0-9]+$/.test(reason)

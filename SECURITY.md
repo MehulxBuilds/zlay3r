@@ -28,6 +28,16 @@ read/write transfers are limited to 8 MB. Chromium relies on container isolation
 and runs with its own Chromium sandbox disabled. The helper and user processes
 share a UID; this is not a security boundary against a compromised container.
 
+The agent loop executes inside that container using a credential-free bundle.
+The worker retains provider keys, authorizes actual tool execution and brokers
+model calls over a private Docker exec channel. Runner identity, counters and
+checkpoints are not trusted as authorization or billing authority. The host binds
+tool calls to model-issued IDs and arguments, checks run leases and budgets, and
+validates checkpoint history. No provider key, database credential, Redis password
+or reusable platform API key is injected for agent orchestration. Explicit secrets
+passed to tool processes remain accessible within that sandbox. See
+[sandbox agents](docs/sandbox-agents.md) for the implemented boundaries and limits.
+
 Network access defaults to none. Allowed public hosts use an HTTP(S) proxy that
 pins DNS results and rejects non-public IP ranges. An isolated internal Docker
 bridge and disabled container DNS prevent direct external connections. Docker 28+
@@ -45,4 +55,6 @@ budgets; they do not promise exact external-provider spend limits.
 
 A focused Docker creation/inspection/non-root command/cleanup check passed during
 the Windows sandbox startup fix. Browser, R2 and provider integration and adversarial
-testing remain unverified. Deployment and new testing work are deferred.
+testing remain unverified. Agent subprocess and focused Docker runner/tool,
+approval/resume and cancellation checks are implemented. Deployment and broader
+hostile-workload testing remain deferred.

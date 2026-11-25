@@ -61,10 +61,13 @@ are supported. On Linux the Unix socket default is unchanged.
 The helper image must exist before sandbox creation. From the repository root:
 
 ```sh
-docker build -t zlayer-sandbox:local packages/sandbox/image
+docker build -f packages/sandbox/image/Dockerfile -t zlayer-sandbox:local .
 ```
 
 This is the sandbox execution image, not application deployment. Rebuild it after
-changing the helper sources. Match the tag to `SANDBOX_IMAGE` if customized. Docker
+changing the helper or agent-runner sources. Build from the repository root: a
+multi-stage build bundles the agent runtime without server credentials or config.
+Match the tag to `SANDBOX_IMAGE` if customized. Existing containers retain their old
+image; create a new sandbox to use the runner. Docker
 connection, unsupported engine and missing-image errors return actionable HTTP 503
 responses instead of a generic internal error.

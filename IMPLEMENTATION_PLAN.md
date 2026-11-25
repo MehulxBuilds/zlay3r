@@ -6,6 +6,34 @@ Application deployment and new test development are explicitly deferred by reque
 
 ## Status
 
+### Agents inside the sandbox
+
+The worker now supervises `@repo/agent-runner` inside the assigned sandbox instead
+of executing the agent loop itself. A portable runtime entry point avoids loading
+server environment/configuration inside the container. Provider keys remain on the
+worker; a private Docker exec channel brokers model and authorized registry calls.
+Host-owned budgets, model-issued call validation, lease checks, fenced completion,
+checkpoint validation and durable events remain outside the sandbox. Per-sandbox
+claims delay competing runs, and approval suspension preserves the container.
+
+The multi-stage image builds a credential-free Node runner. Rebuild from the
+repository root using `bun run sandbox:build` and create a new sandbox; existing
+containers keep their old image. Tests exercise subprocess execution, approval
+resume, cancellation, forged checkpoints/counters/calls and lease loss. A real
+Docker check verified UID 1000, the in-container runner process, network-disabled
+shell/file execution, approval/resume, cancellation and temporary-resource cleanup.
+No database changes, real provider calls or live queue worker startup were used.
+
+Verification: 14 tests passed with 95 assertions; all 22 workspace type/build
+prerequisite tasks passed. Changed TypeScript files pass lint at error level.
+Repository-wide lint and exact dependency checks retain the pre-existing avatar
+hook errors and DiceBear ranges documented below. The Docker image was built and
+its runner was exercised with a mock model and real isolated tool execution.
+
+This remains a Docker/shared-kernel backend with ephemeral tmpfs workspaces.
+Persistent snapshots, user images and microVM providers remain future work. See
+[sandbox agents](docs/sandbox-agents.md) for implementation and acceptance limits.
+
 ### MCP v2 npm replacement
 
 The MCP baseline in phase 5 used custom protocol code. It has been replaced with

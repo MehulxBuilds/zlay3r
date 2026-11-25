@@ -18,7 +18,8 @@
     "@repo/sandbox": "workspace:*",
     "@repo/shared": "workspace:*",
     "bullmq": "5.56.0",
-    "ioredis": "5.9.3"
+    "ioredis": "5.9.3",
+    "@repo/agent-runner": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.9.3",

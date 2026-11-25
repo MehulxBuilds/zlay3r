@@ -89,6 +89,7 @@
       "name": "@repo/worker",
       "version": "0.1.0",
       "dependencies": {
+        "@repo/agent-runner": "workspace:*",
         "@repo/agent-runtime": "workspace:*",
         "@repo/db": "workspace:*",
         "@repo/env": "workspace:*",
@@ -98,6 +99,20 @@
         "@repo/storage": "workspace:*",
         "bullmq": "5.56.0",
         "ioredis": "5.9.3",
+      },
+      "devDependencies": {
+        "@repo/typescript-config": "workspace:*",
+        "@types/node": "22.19.11",
+        "typescript": "5.9.3",
+      },
+    },
+    "packages/agent-runner": {
+      "name": "@repo/agent-runner",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/agent-runtime": "workspace:*",
+        "@repo/shared": "workspace:*",
+        "zod": "4.3.6",
       },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",
@@ -764,6 +779,8 @@
     "@radix-ui/rect": ["@radix-ui/rect@1.1.1", "", {}, "sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw=="],
 
     "@react-oauth/google": ["@react-oauth/google@0.13.5", "", { "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-xQWri2s/3nNekZJ4uuov2aAfQYu83bN3864KcFqw2pK1nNbFurQIjPFDXhWaKH3IjYJ2r/9yyIIpsn5lMqrheQ=="],
+
+    "@repo/agent-runner": ["@repo/agent-runner@workspace:packages/agent-runner"],
 
     "@repo/agent-runtime": ["@repo/agent-runtime@workspace:packages/agent-runtime"],
 

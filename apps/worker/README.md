@@ -15,3 +15,17 @@ Provider configuration, policy budgets, captured tool permissions and selected
 secret references come from the run's organization. Browser and MCP subprocesses
 run inside the assigned sandbox. Metadata, usage, tool calls and checkpoints persist
 in PostgreSQL. OTLP export is optional; deploying a collector is deferred.
+
+The agent loop now runs in `packages/agent-runner` inside the sandbox image. The
+worker supervises its private Docker exec channel and retains provider keys,
+model calls, policy enforcement and persistence. Sandbox code receives neither
+database/Redis credentials nor provider keys. Native and MCP tools use the host
+registry after validation against model-issued tool calls. Only one agent run per
+sandbox can be claimed at once; additional jobs are delayed without consuming a
+run attempt. Clean approval suspension closes the runner while keeping the sandbox
+alive. Cancellation, lost channels and deadlines can stop the whole sandbox.
+
+Build the new image from the repository root with `bun run sandbox:build`, then
+create a new sandbox. Old image containers report `SANDBOX_RUNNER_IMAGE_REQUIRED`.
+No queue worker is launched by the isolated smoke script; see
+[sandbox agents](../../docs/sandbox-agents.md) for verification and remaining limits.

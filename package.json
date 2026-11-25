@@ -11,7 +11,9 @@
     "db:push": "turbo db:push",
     "db:initialize": "bun run --cwd packages/db db:initialize",
     "check-dependencies": "bun scripts/check-dependencies.ts",
-    "test": "bun test apps/http/src apps/remote-mcp/src packages/agent-runtime/src"
+    "test": "bun run --cwd packages/agent-runner build && bun test apps/http/src apps/remote-mcp/src apps/worker/src packages/agent-runtime/src",
+    "sandbox:build": "docker build -f packages/sandbox/image/Dockerfile -t zlayer-sandbox:local .",
+    "sandbox:smoke-agent": "tsx apps/worker/src/smoke-sandbox-agent.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.8",

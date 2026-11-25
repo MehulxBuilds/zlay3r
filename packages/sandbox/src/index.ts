@@ -1,9 +1,15 @@
 import Docker from "dockerode";
 import { randomUUID } from "node:crypto";
 import { PassThrough } from "node:stream";
+import { setTimeout as delay } from "node:timers/promises";
 import { server_env as env } from "@repo/env";
 import type { ExecuteResult } from "@repo/shared";
 import { span } from "@repo/observability";
+import {
+  agentChannel,
+  AgentRemoteError,
+  type AgentRequestHandler,
+} from "@repo/shared/agent-channel";
 
 export class SandboxError extends Error {
   constructor(
@@ -24,6 +30,12 @@ export interface ExecutionOptions {
   signal?: AbortSignal;
 }
 export interface SandboxProvider {
+  runAgent<T>(
+    id: string,
+    launch: unknown,
+    handler: AgentRequestHandler,
+    options: { signal: AbortSignal; timeoutMs: number },
+  ): Promise<T>;
   create(input: {
     name: string;
     memoryMb: number;
@@ -51,8 +63,108 @@ export interface SandboxProvider {
 
 export class DockerSandboxProvider implements SandboxProvider {
   private readonly docker: Docker;
+  private readonly agents = new Set<string>();
   constructor(socketPath = env.DOCKER_SOCKET) {
     this.docker = new Docker({ socketPath });
+  }
+  async runAgent<T>(
+    id: string,
+    launch: unknown,
+    handler: AgentRequestHandler,
+    options: { signal: AbortSignal; timeoutMs: number },
+  ): Promise<T> {
+    options.signal.throwIfAborted();
+    if (this.agents.has(id)) throw new Error("SANDBOX_AGENT_BUSY");
+    this.agents.add(id);
+    const signal = AbortSignal.any([
+      options.signal,
+      AbortSignal.timeout(options.timeoutMs),
+    ]);
+    const container = this.docker.getContainer(id);
+    let stream: import("node:stream").Duplex | undefined;
+    let channel: ReturnType<typeof agentChannel> | undefined;
+    let stop: Promise<unknown> | undefined;
+    let runnerStarted = false;
+    let inspectRunner: (() => Promise<{ Running: boolean }>) | undefined;
+    const abort = () => {
+      channel?.close(new Error("AGENT_INTERRUPTED"));
+      if (!runnerStarted) return;
+      // Stop the whole isolation boundary, including detached descendants.
+      stop ??= container.stop({ t: 0 }).catch(() => {
+        throw new Error("AGENT_TERMINATION_FAILED");
+      });
+      void stop.catch(() => {});
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    try {
+      const info = await container.inspect();
+      const image = await this.docker.getImage(info.Image).inspect();
+      if (image.Config?.Labels?.["zlayer.agent-runner"] !== "1")
+        throw new Error("SANDBOX_RUNNER_IMAGE_REQUIRED");
+      const exec = await container.exec({
+        Cmd: ["node", "/opt/zlayer/agent-runner.mjs"],
+        WorkingDir: "/workspace",
+        User: "1000:1000",
+        AttachStdin: true,
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      inspectRunner = () => exec.inspect();
+      signal.throwIfAborted();
+      runnerStarted = true;
+      stream = (await exec.start({
+        hijack: true,
+        stdin: true,
+      })) as unknown as import("node:stream").Duplex;
+      const output = new PassThrough(),
+        errors = new PassThrough();
+      // Stderr is drained, never mixed into the private protocol or logged.
+      errors.resume();
+      this.docker.modem.demuxStream(stream, output, errors);
+      channel = agentChannel(output, stream, handler);
+      stream.once("error", () =>
+        channel?.close(new Error("AGENT_TRANSPORT_FAILED")),
+      );
+      stream.once("end", () => channel?.close());
+      stream.once("close", () => channel?.close());
+      signal.throwIfAborted();
+      const result = await channel.request("run", launch);
+      signal.throwIfAborted();
+      return result as T;
+    } catch (error) {
+      // A broken channel may leave an agent executing; terminate it before retry.
+      if (
+        !(error instanceof AgentRemoteError) ||
+        ["RUN_CANCELLED", "LEASE_LOST", "LEASE_UNAVAILABLE"].includes(
+          error.message,
+        )
+      )
+        abort();
+      if (stop) await stop;
+      if (signal.aborted) throw signal.reason;
+      throw error;
+    } finally {
+      signal.removeEventListener("abort", abort);
+      channel?.close();
+      stream?.end();
+      try {
+        if (runnerStarted && inspectRunner && !stop) {
+          let running = true;
+          for (let attempt = 0; attempt < 20; attempt++) {
+            running = (await inspectRunner()).Running;
+            if (!running) break;
+            await delay(50);
+          }
+          if (running) {
+            abort();
+            if (stop) await stop;
+          }
+        }
+      } finally {
+        stream?.destroy();
+        this.agents.delete(id);
+      }
+    }
   }
   async preflight() {
     let version: { Version: string };
