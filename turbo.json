@@ -13,6 +13,16 @@
     "MODEL_NAME",
     "DOCKER_SOCKET",
     "LOG_LEVEL",
+    "INSTANCE_ID",
+    "SANDBOX_IMAGE",
+    "SANDBOX_SECCOMP",
+    "WORKER_CONCURRENCY",
+    "ENCRYPTION_KEY",
+    "R2_ACCOUNT_ID",
+    "R2_BUCKET",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
     "NEXT_PUBLIC_API_BASE",
     "NEXT_PUBLIC_GOOGLE_CLIENT_ID"
   ],
@@ -28,6 +38,7 @@
       "dependsOn": ["^lint"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     },
@@ -41,7 +52,7 @@
       "env": ["DATABASE_URL"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^build", "^check-types"]
     }
   },
   "globalDependencies": ["env/.env.*"]

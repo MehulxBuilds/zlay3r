@@ -1,3 +1,4 @@
+import { bodySchema } from "../../lib/route-schema";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { server_env as env } from "@repo/env";
@@ -59,24 +60,61 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthService) {
       expiresAt: result.expiresAt,
     };
   }
-  app.post("/register", options, async (request, reply) => {
-    const input = z
-      .object({ email, password, name: z.string().trim().min(1).max(100) })
-      .parse(request.body);
-    return respond(reply.code(201), await auth.register(input));
-  });
-  app.post("/login", options, async (request, reply) => {
-    const input = z
-      .object({ email, password: z.string().min(1).max(128) })
-      .parse(request.body);
-    return respond(reply, await auth.login(input));
-  });
-  app.post("/google", options, async (request, reply) => {
-    const { credential } = z
-      .object({ credential: z.string().min(1).max(10000) })
-      .parse(request.body);
-    return respond(reply, await auth.google(credential));
-  });
+  app.post(
+    "/register",
+    {
+      ...options,
+      schema: {
+        body: bodySchema(
+          z.object({
+            email,
+            password,
+            name: z.string().trim().min(1).max(100),
+          }),
+        ),
+      },
+    },
+    async (request, reply) => {
+      const input = z
+        .object({ email, password, name: z.string().trim().min(1).max(100) })
+        .parse(request.body);
+      return respond(reply.code(201), await auth.register(input));
+    },
+  );
+  app.post(
+    "/login",
+    {
+      ...options,
+      schema: {
+        body: bodySchema(
+          z.object({ email, password: z.string().min(1).max(128) }),
+        ),
+      },
+    },
+    async (request, reply) => {
+      const input = z
+        .object({ email, password: z.string().min(1).max(128) })
+        .parse(request.body);
+      return respond(reply, await auth.login(input));
+    },
+  );
+  app.post(
+    "/google",
+    {
+      ...options,
+      schema: {
+        body: bodySchema(
+          z.object({ credential: z.string().min(1).max(10000) }),
+        ),
+      },
+    },
+    async (request, reply) => {
+      const { credential } = z
+        .object({ credential: z.string().min(1).max(10000) })
+        .parse(request.body);
+      return respond(reply, await auth.google(credential));
+    },
+  );
   app.get("/me", { preHandler: authenticate(auth) }, async (request, reply) => {
     reply.header("cache-control", "no-store");
     return { user: request.user };

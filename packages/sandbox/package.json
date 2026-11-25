@@ -10,9 +10,10 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "dockerode": "4.0.7",
+    "@repo/env": "workspace:*",
+    "@repo/observability": "workspace:*",
     "@repo/shared": "workspace:*",
-    "@repo/env": "workspace:*"
+    "dockerode": "4.0.7"
   },
   "devDependencies": {
     "@types/node": "22.19.11",

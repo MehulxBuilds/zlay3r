@@ -3,6 +3,7 @@
   "module": "src/index.ts",
   "type": "module",
   "scripts": {
+    "db:initialize": "bun src/initialize-development.ts",
     "dev": "tsc --watch",
     "build": "tsc --noEmit",
     "check-types": "tsc --noEmit",

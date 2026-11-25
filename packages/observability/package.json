@@ -10,8 +10,13 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "pino": "9.6.0",
-    "@repo/env": "workspace:*"
+    "@opentelemetry/api": "1.9.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "0.208.0",
+    "@opentelemetry/exporter-trace-otlp-http": "0.208.0",
+    "@opentelemetry/sdk-metrics": "2.2.0",
+    "@opentelemetry/sdk-node": "0.208.0",
+    "@repo/env": "workspace:*",
+    "pino": "9.6.0"
   },
   "devDependencies": {
     "typescript": "5.9.3",

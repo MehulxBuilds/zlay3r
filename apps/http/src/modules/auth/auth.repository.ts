@@ -1,4 +1,12 @@
-import { db, eq, organization, session, user } from "@repo/db";
+import {
+  db,
+  eq,
+  organization,
+  session,
+  user,
+  membership,
+  executionPolicy,
+} from "@repo/db";
 
 export type User = typeof user.$inferSelect;
 export type Session = typeof session.$inferSelect;
@@ -39,6 +47,12 @@ export const authRepository: AuthRepository = {
         .insert(user)
         .values({ ...input, organizationId: org!.id })
         .returning();
+      await tx.insert(membership).values({
+        organizationId: org!.id,
+        userId: created!.id,
+        role: "owner",
+      });
+      await tx.insert(executionPolicy).values({ organizationId: org!.id });
       return created!;
     });
   },
