@@ -1,0 +1,10 @@
+{
+  "name": "@platform/agent-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@platform/sandbox": "workspace:*" },
+  "devDependencies": { "typescript": "^5.8.3" }
+}
