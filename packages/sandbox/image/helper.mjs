@@ -40,7 +40,9 @@ const input =
           }
           if (data.includes("\n")) {
             process.stdin.removeListener("data", receive);
-            process.stdin.pause();
+            // Each helper handles one request. Close Docker's attached input so
+            // it cannot keep the process alive after the response is written.
+            process.stdin.destroy();
             try {
               resolve(JSON.parse(data.slice(0, data.indexOf("\n"))));
             } catch (error) {
