@@ -5,7 +5,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarRail,
   Separator,
 } from "@repo/ui";
 import type { User } from "@repo/web/lib/schemas";
@@ -16,8 +15,8 @@ export function AppSidebar({ user, admin }: { user: User; admin: boolean }) {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className="brand-lockup px-2 py-5 group-data-[collapsible=icon]:justify-center">
-          <span className="brand-emblem">z</span>
+        <div className="brand-lockup px-2 py-5 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:py-2">
+          <span className="brand-emblem shrink-0">z</span>
           <span className="group-data-[collapsible=icon]:hidden">
             zlayer
             <span className="ml-2 text-[10px] font-medium tracking-wider text-muted-foreground">
@@ -34,7 +33,6 @@ export function AppSidebar({ user, admin }: { user: User; admin: boolean }) {
         <Separator />
         <NavUser user={user} />
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

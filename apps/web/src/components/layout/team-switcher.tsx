@@ -36,7 +36,7 @@ export function TeamSwitcher() {
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="border border-sidebar-border"
+                className="border border-sidebar-border group-data-[collapsible=icon]:border-0"
               >
                 <div className="grid size-8 shrink-0 place-items-center bg-primary">
                   <Avatar className="size-8">
@@ -46,7 +46,7 @@ export function TeamSwitcher() {
                     </AvatarFallback>
                   </Avatar>
                 </div>
-                <div className="grid flex-1 text-left leading-tight">
+                <div className="grid flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-semibold">
                     {active?.name ?? "Choose workspace"}
                   </span>
@@ -54,7 +54,7 @@ export function TeamSwitcher() {
                     {active?.role ?? "Workspace"}
                   </span>
                 </div>
-                <ChevronsUpDown className="ml-auto size-4" />
+                <ChevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent
@@ -69,7 +69,7 @@ export function TeamSwitcher() {
                   key={organization.id}
                   onSelect={() => setOrganization(organization.id)}
                 >
-                   <Avatar className="size-8">
+                  <Avatar className="size-8">
                     <AvatarImage src={avatarUrl} alt={avatarUrl} />
                     <AvatarFallback className="bg-primary/30 text-forest">
                       <Box className="size-4" />
