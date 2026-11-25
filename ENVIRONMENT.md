@@ -1,13 +1,14 @@
 # Server environment
 
-Only server code imports `@repo/env`. Public browser configuration stays in
-`apps/web/src/lib/env.ts` and `apps/web/.env.local`.
+All applications read the single repository-root `.env`, in development and
+production. Start from the root `.env.example` template. Do not create per-app,
+per-environment or local override env files. The root `.env` is ignored by Git
+and excluded from Docker build contexts. Injected process variables take precedence.
 
-Development defaults are loaded from `env/.env.development`; put secrets and
-machine overrides in ignored `env/.env.development.local`. Both paths are resolved
-relative to the env package, so startup works from any workspace. Already injected
-process variables take precedence, including variables Bun loads from a root `.env`.
-Production reads injected environment variables only.
+Server code reads validated values through `@repo/env`. The web app loads the
+same root file in its server-side Next.js configuration; browser code only reads
+explicit `NEXT_PUBLIC_*` values in `apps/web/src/lib/env.ts`. Never prefix a
+secret with `NEXT_PUBLIC_`. Public values are fixed when the web app builds.
 
 | Variable                                        | Purpose                                                               |
 | ----------------------------------------------- | --------------------------------------------------------------------- |
@@ -39,7 +40,7 @@ authorized JavaScript origins and set the same client ID in
 
 To generate an encryption key locally, run
 `bun -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`
-and place the result only in the ignored local environment file. Never commit it.
+and place the result in the root `.env`. Keep this key stable; never commit it.
 
 The source Drizzle schema must be explicitly reviewed and applied separately before
 using the new features. No migrations are generated, and no schema-changing command

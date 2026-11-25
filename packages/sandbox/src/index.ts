@@ -194,7 +194,7 @@ export class DockerSandboxProvider implements SandboxProvider {
       ) {
         throw new SandboxError(
           "SANDBOX_IMAGE_NOT_FOUND",
-          "Build the sandbox helper image from packages/sandbox/image before creating a sandbox. See env/README.md.",
+          "Build the sandbox image with bun run sandbox:build before creating a sandbox. See ENVIRONMENT.md.",
         );
       }
       throw new SandboxError(

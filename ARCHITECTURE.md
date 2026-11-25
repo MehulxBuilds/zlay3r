@@ -72,7 +72,7 @@ cleans abandoned resources, and callers must account for uncertain outcomes.
 
 ## Configuration and operations
 
-See [environment setup](env/README.md), [HTTP contracts](apps/http/README.md),
+See [environment setup](ENVIRONMENT.md), [HTTP contracts](apps/http/README.md),
 [SDK usage](packages/sdk/README.md) and [security boundaries](SECURITY.md).
 No install, startup, build or verification command applies schemas or generates
 migrations. Agent subprocess, MCP and isolated Docker smoke tests are implemented;

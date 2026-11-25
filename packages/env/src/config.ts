@@ -3,21 +3,10 @@ import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 
 // Resolve from this module, so every workspace loads the same server config.
-const environment = process.env.NODE_ENV ?? "development";
-if (environment !== "production") {
-  config({
-    path: fileURLToPath(
-      new URL(`../../../env/.env.${environment}.local`, import.meta.url),
-    ),
-    quiet: true,
-  });
-  config({
-    path: fileURLToPath(
-      new URL(`../../../env/.env.${environment}`, import.meta.url),
-    ),
-    quiet: true,
-  });
-}
+config({
+  path: fileURLToPath(new URL("../../../.env", import.meta.url)),
+  quiet: true,
+});
 
 export const ServerEnvSchema = z.object({
   NODE_ENV: z

@@ -2,6 +2,10 @@
 
 The accepted scope preserves Bun, Drizzle, Fastify, Next.js, BullMQ and Docker.
 No migrations are generated and no database-changing command runs automatically.
+All applications now load the single ignored root `.env`; `.env.example` is the
+only configuration template. Per-app and per-environment files were consolidated
+without replacing existing root values or changing the encryption key. Public
+browser values still require `NEXT_PUBLIC_` and are read only by the web app.
 Application deployment and new test development are explicitly deferred by request.
 
 ## Status
@@ -141,7 +145,7 @@ was not started against existing queues by this implementation.
   Kubernetes, deployment or monitoring-stack provisioning was added.
 
 See [architecture](ARCHITECTURE.md), [security boundaries](SECURITY.md),
-[environment configuration](env/README.md), [HTTP docs](apps/http/README.md), and
+[environment configuration](ENVIRONMENT.md), [HTTP docs](apps/http/README.md), and
 [SDK docs](packages/sdk/README.md) for the implemented contracts and constraints.
 
 ## Windows sandbox startup fix

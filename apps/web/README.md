@@ -7,8 +7,10 @@ TanStack Query for server state and Zustand for shared interface state.
 
 From the repository root, run `bun run dev` to start all workspace dependencies.
 Alternatively build `@repo/ui` and `@repo/sdk` before starting only the web app.
-Public browser variables belong in `apps/web/.env.local`; server-only configuration
-stays in `@repo/env`. The default browser and API ports are 3000 and 3001.
+All configuration lives in the repository-root `.env`. Next.js loads that file
+in its server-side config, and browser code reads only `NEXT_PUBLIC_*` variables.
+Other server applications use `@repo/env`. The default browser and API ports are
+3000 and 3001. See [environment setup](../../ENVIRONMENT.md).
 
 ## Structure
 

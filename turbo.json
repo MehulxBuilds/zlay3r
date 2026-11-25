@@ -58,5 +58,5 @@
       "dependsOn": ["^build", "^check-types"]
     }
   },
-  "globalDependencies": ["env/.env.*"]
+  "globalDependencies": [".env"]
 }

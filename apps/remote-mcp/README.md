@@ -2,8 +2,8 @@
 
 Run the platform HTTP API first, then `bun run --cwd apps/remote-mcp start`.
 The Streamable HTTP endpoint is `http://localhost:3002/mcp`. Configure `MCP_PORT`
-and `MCP_API_BASE` through `@repo/env`; development defaults live in
-`env/.env.development`. Use HTTPS at the public reverse proxy.
+and `MCP_API_BASE` through `@repo/env`; all configuration lives in the root
+`.env`. Use HTTPS at the public reverse proxy.
 
 Create a platform API key with `mcp.execute` plus the scopes for the desired
 operations. Configure your MCP client with that key in the Authorization header:

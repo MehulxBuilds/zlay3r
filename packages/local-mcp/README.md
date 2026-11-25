@@ -1,7 +1,7 @@
 # Local MCP
 
-Run the platform HTTP API. Put `MCP_API_KEY` in the ignored
-`env/.env.development.local` file, or supply it through the MCP client's process
+Run the platform HTTP API. Put `MCP_API_KEY` in the ignored repository-root
+`.env` file, or supply it through the MCP client's process
 environment. The key needs `mcp.execute` and each desired operation's scopes.
 Set `MCP_API_BASE` if the platform API is not at `http://localhost:3001`.
 
