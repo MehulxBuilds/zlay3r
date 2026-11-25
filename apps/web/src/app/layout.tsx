@@ -9,8 +9,8 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Zlayer",
-  description: "Agent sandbox control plane",
+  title: "zlayer",
+  description: "Agentic sandbox control plane",
 };
 
 export default function RootLayout({
