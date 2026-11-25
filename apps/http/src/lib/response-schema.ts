@@ -341,6 +341,11 @@ export function responseSchemas(
         createdAt: date,
       }),
     );
+  else if (url === "/v1/mcp/principal")
+    schema = object({ organizationId: text, scopes: strings }, [
+      "organizationId",
+      "scopes",
+    ]);
   else if (url === "/v1/mcp-servers") {
     schema =
       method === "GET"

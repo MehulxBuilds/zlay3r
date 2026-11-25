@@ -8,7 +8,6 @@ import {
   mcpServer,
   sandbox,
   executionPolicy,
-  evaluateAction,
   resolveSecrets,
 } from "@repo/db";
 import {
@@ -117,7 +116,7 @@ export async function registerMcpRoutes(
         : configuration.secretNames;
     if (names.length) authorize(request, "secrets.use");
     const values = await resolveSecrets(request.user.organizationId, names);
-    let transport: McpTransport;
+    let transport: McpTransport | ReturnType<typeof httpMcpTransport>;
     if (configuration.transport === "http") {
       const [policy] = await db
         .select()
@@ -183,131 +182,12 @@ export async function registerMcpRoutes(
       }
     }
   });
-  app.post(
-    "/mcp",
-    {
-      schema: {
-        body: bodySchema(
-          z.object({
-            jsonrpc: z.literal("2.0"),
-            id: z.union([z.string(), z.number()]).optional(),
-            method: z.string().max(100),
-            params: z.record(z.string(), z.unknown()).optional(),
-          }),
-        ),
-      },
-    },
-    async (request, reply) => {
-      const rpc = z
-        .object({
-          jsonrpc: z.literal("2.0"),
-          id: z.union([z.string(), z.number()]).optional(),
-          method: z.string().max(100),
-          params: z.record(z.string(), z.unknown()).optional(),
-        })
-        .parse(request.body);
-      if (rpc.method === "notifications/initialized" && rpc.id === undefined)
-        return reply.code(202).send();
-      if (rpc.id === undefined) return reply.code(202).send();
-      let result: unknown;
-      if (rpc.method === "initialize")
-        result = {
-          protocolVersion: "2025-03-26",
-          capabilities: { tools: {} },
-          serverInfo: { name: "zlayer", version: "1.0.0" },
-        };
-      else if (rpc.method === "ping") result = {};
-      else if (rpc.method === "tools/list") {
-        authorize(request, "mcp.execute");
-        result = {
-          tools: [
-            {
-              name: "execute_command",
-              description: "Run a bounded command in an authorized sandbox",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  sandboxId: { type: "string" },
-                  command: { type: "string" },
-                },
-                required: ["sandboxId", "command"],
-                additionalProperties: false,
-              },
-            },
-            {
-              name: "read_file",
-              description: "Read an authorized workspace file",
-              inputSchema: {
-                type: "object",
-                properties: {
-                  sandboxId: { type: "string" },
-                  path: { type: "string" },
-                },
-                required: ["sandboxId", "path"],
-                additionalProperties: false,
-              },
-            },
-          ],
-        };
-      } else if (rpc.method === "tools/call") {
-        authorize(request, "mcp.execute");
-        const { name, arguments: args } = z
-          .object({
-            name: z.enum(["execute_command", "read_file"]),
-            arguments: z.object({
-              sandboxId: z.string().uuid(),
-              command: z.string().min(1).max(4000).optional(),
-              path: z.string().max(4096).optional(),
-            }),
-          })
-          .parse(rpc.params);
-        authorize(
-          request,
-          name === "execute_command" ? "sandbox.execute" : "files.read",
-        );
-        const [box] = await db
-          .select()
-          .from(sandbox)
-          .where(
-            and(
-              eq(sandbox.id, args.sandboxId),
-              eq(sandbox.organizationId, request.user.organizationId),
-              eq(sandbox.status, "RUNNING"),
-            ),
-          )
-          .limit(1);
-        if (!box?.resourceId) throw new HttpError(404, "SANDBOX_NOT_FOUND");
-        const actionArgs =
-          name === "execute_command"
-            ? { command: args.command }
-            : { path: args.path };
-        if (Object.values(actionArgs).some((value) => value === undefined))
-          throw new HttpError(400, "INVALID_TOOL_ARGUMENTS");
-        const decision = await evaluateAction(
-          request.user.organizationId,
-          name,
-          actionArgs,
-          args.sandboxId,
-        );
-        if (!decision.allowed)
-          throw new HttpError(409, decision.reason!, {
-            approvalId: decision.approvalId,
-          });
-        const value =
-          name === "execute_command"
-            ? await provider.execute(box.resourceId, args.command!)
-            : await provider.file(box.resourceId, {
-                op: "read",
-                path: args.path,
-              });
-        result = { content: [{ type: "text", text: JSON.stringify(value) }] };
-      } else
-        return {
-          jsonrpc: "2.0",
-          id: rpc.id,
-          error: { code: -32601, message: "Method not found" },
-        };
-      return { jsonrpc: "2.0", id: rpc.id, result };
-    },
-  );
+  app.get("/mcp/principal", async (request) => {
+    authorize(request, "mcp.execute");
+    if (!request.apiScopes) throw new HttpError(401, "API_KEY_REQUIRED");
+    return {
+      organizationId: request.user.organizationId,
+      scopes: request.apiScopes,
+    };
+  });
 }

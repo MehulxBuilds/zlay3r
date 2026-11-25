@@ -16,11 +16,15 @@
     "ajv": "8.18.0",
     "ajv-formats": "3.0.1",
     "ipaddr.js": "2.5.0",
-    "safe-regex2": "5.1.2"
+    "safe-regex2": "5.1.2",
+    "@repo/mcp-client": "workspace:*"
   },
   "devDependencies": {
     "typescript": "5.9.3",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "22.19.11"
+    "@types/node": "22.19.11",
+    "@modelcontextprotocol/client": "2.4.0",
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "4.3.6"
   }
 }

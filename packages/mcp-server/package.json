@@ -1,0 +1,22 @@
+{
+  "name": "@repo/mcp-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "@repo/sdk": "workspace:*",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "22.19.11",
+    "typescript": "5.9.3"
+  }
+}

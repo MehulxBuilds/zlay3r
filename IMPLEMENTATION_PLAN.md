@@ -6,6 +6,34 @@ Application deployment and new test development are explicitly deferred by reque
 
 ## Status
 
+### MCP v2 npm replacement
+
+The MCP baseline in phase 5 used custom protocol code. It has been replaced with
+the official v2 npm client/server packages (`2.4.0`) and Node transport (`2.1.2`).
+The remote entry point is `apps/remote-mcp`; the local stdio entry point is
+`packages/local-mcp`. Shared packages contain the client and server catalog.
+The agent registry now accepts JSON Schema 2020-12 as well as existing draft-07.
+The sandbox helper uses the official stdio transport; rebuild the helper image
+before using sandbox stdio connections with this source version.
+
+The former `/v1/mcp` protocol endpoint is replaced by the remote app's `/mcp`.
+Management endpoints remain `/v1/mcp-servers`. MCP entry points reuse the platform
+REST API and derive organization/scopes from verified platform API keys.
+
+Verification: MCP registry/HTTP integration and existing authentication tests pass
+(8 tests, 57 assertions), including a real local stdio subprocess against a mock
+platform API. No database mutation or image build was performed.
+All 20 type-check/build prerequisite tasks passed, and changed TypeScript files
+passed lint at error level. Repository-wide lint still reports two pre-existing
+avatar hook dependency errors in `apps/web/src/components/shared/app-avatar.tsx`.
+Dependency verification confirms one resolved version for each of 531 packages,
+but fails exact-version declaration checks for the existing DiceBear ranges in
+`apps/web/package.json`. These unrelated files were not changed.
+Follow-on OAuth, persisted discovery/execution records, per-tool toggles, health
+management and live infrastructure acceptance remain incomplete. The older
+statement deferring new test development does not apply to these MCP tests.
+See [MCP architecture](docs/mcp-architecture.md) for boundaries and setup.
+
 ?Implemented? below means source behavior is wired through the platform and passes
 static checks. It does not claim live integration acceptance or production readiness.
 

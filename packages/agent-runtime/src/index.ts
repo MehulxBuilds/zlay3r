@@ -1,5 +1,6 @@
 import { server_env as env } from "@repo/env";
 import Ajv from "ajv";
+import Ajv2020 from "ajv/dist/2020";
 import addFormats from "ajv-formats";
 import safeRegex from "safe-regex2";
 import { span } from "@repo/observability";
@@ -33,8 +34,10 @@ export interface Tool extends ToolDefinition {
 export class ToolRegistry {
   private readonly tools = new Map<string, Tool>();
   private readonly ajv = new Ajv({ strict: true, allErrors: false });
+  private readonly ajv2020 = new Ajv2020({ strict: true, allErrors: false });
   constructor() {
     addFormats(this.ajv);
+    addFormats(this.ajv2020);
   }
   register(tool: Tool) {
     if (
@@ -61,7 +64,12 @@ export class ToolRegistry {
       }
     };
     inspect(tool.inputSchema, 0);
-    const validate = this.ajv.compile(tool.inputSchema);
+    const validator =
+      tool.inputSchema.$schema ===
+      "https://json-schema.org/draft/2020-12/schema"
+        ? this.ajv2020
+        : this.ajv;
+    const validate = validator.compile(tool.inputSchema);
     const original = tool.validate;
     this.tools.set(tool.name, {
       ...tool,

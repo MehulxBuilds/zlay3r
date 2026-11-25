@@ -1,3 +1,4 @@
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { spawn } from "node:child_process";
 import {
   mkdir,
@@ -279,57 +280,58 @@ if (input.op === "service") {
           return;
         }
         if (!session) {
-          const child = spawn(action.command, action.args ?? [], {
+          const transport = new StdioClientTransport({
+            command: action.command,
+            args: action.args ?? [],
             cwd: root,
             env: {
               PATH: "/usr/local/bin:/usr/bin:/bin",
               HOME: root,
               ...action.env,
             },
-            stdio: ["pipe", "pipe", "ignore"],
-            detached: true,
+            stderr: "ignore",
           });
-          session = { child, pending: new Map(), buffer: "" };
+          session = { transport, pending: new Map() };
           mcpProcesses.set(action.id, session);
-          child.stdout.setEncoding("utf8");
-          child.stdout.on("data", (chunk) => {
-            session.buffer += chunk;
-            if (session.buffer.length > 1048576) {
-              child.kill("SIGKILL");
-              return;
-            }
-            let end;
-            while ((end = session.buffer.indexOf("\n")) >= 0) {
-              const line = session.buffer.slice(0, end);
-              session.buffer = session.buffer.slice(end + 1);
-              try {
-                const reply = JSON.parse(line);
-                const pending = session.pending.get(reply.id);
-                if (pending) {
-                  session.pending.delete(reply.id);
-                  pending.resolve(reply);
-                }
-              } catch {
-                child.kill("SIGKILL");
-              }
-            }
-          });
           const fail = () => {
             for (const pending of session.pending.values())
               pending.reject(new Error("MCP_DISCONNECTED"));
+            session.pending.clear();
             mcpProcesses.delete(action.id);
           };
-          child.once("error", fail);
-          child.once("exit", fail);
+          transport.onmessage = (message) => {
+            if (JSON.stringify(message).length > 1048576) {
+              fail();
+              void transport.close().catch(() => {});
+              return;
+            }
+            if ("id" in message) {
+              const pending = session.pending.get(message.id);
+              session.pending.delete(message.id);
+              pending?.resolve(message);
+            }
+          };
+          transport.onclose = fail;
+          transport.onerror = () => {
+            fail();
+            void transport.close().catch(() => {});
+          };
+          try {
+            await transport.start();
+          } catch (error) {
+            fail();
+            throw error;
+          }
         }
         if (action.close) {
-          terminate(session.child.pid);
+          await session.transport.close();
           mcpProcesses.delete(action.id);
           result = { closed: true };
         } else if (action.message.id === undefined) {
-          session.child.stdin.write(JSON.stringify(action.message) + "\n");
+          await session.transport.send(action.message);
           result = {};
-        } else
+        } else {
+          if (session.pending.size >= 128) throw new Error("MCP_REQUEST_LIMIT");
           result = await new Promise((resolve, reject) => {
             const timer = setTimeout(() => {
               session.pending.delete(action.message.id);
@@ -340,10 +342,18 @@ if (input.op === "service") {
                 clearTimeout(timer);
                 resolve(value);
               },
-              reject,
+              reject(error) {
+                clearTimeout(timer);
+                reject(error);
+              },
             });
-            session.child.stdin.write(JSON.stringify(action.message) + "\n");
+            void session.transport.send(action.message).catch((error) => {
+              session.pending.delete(action.message.id);
+              clearTimeout(timer);
+              reject(error);
+            });
           });
+        }
       } else throw new Error("UNKNOWN_SERVICE_ACTION");
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ result }));
