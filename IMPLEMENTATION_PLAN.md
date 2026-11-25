@@ -42,7 +42,7 @@ static checks. It does not claim live integration acceptance or production readi
 ## Verification
 
 - Locked installation: `bun install --frozen-lockfile` passed.
-- Dependency consistency: 510 packages, one resolved version each.
+- Dependency consistency: 513 packages, one resolved version each.
 - Type checks: 15 tasks passed.
 - Existing authentication tests: 6 passed, 38 assertions.
 - Biome lint at error level: passed across 136 files.
@@ -97,3 +97,20 @@ remains the package manager/test runner. Docker 29.1.3 and the built helper imag
 successfully created and executed a temporary sandbox, which was removed afterward.
 Creation preflight now reports Docker availability, engine version and missing-image
 errors as actionable 503 responses in the dashboard.
+
+## UI refresh
+
+Replaced the original dashboard with focused feature directories and module-based
+TanStack Query hooks. Shared workspace/navigation state uses Zustand. Components
+compose the shadcn primitives in `@repo/ui`, including the sidebar-07 composition,
+Alert, Skeleton, Dialog, Sheet, Checkbox and Sonner. Geist is used throughout.
+The palette is cream `#F6F2E6`, green `#94C573` and occasional pink `#FFBAF1`, with
+pixel borders/shadows and readable darker green text.
+
+Comma-separated controls were replaced with checkbox and add/remove inputs.
+Client request forms and API responses use Zod contracts. Mobile resource lists
+stack into cards; background refetches retain existing content. Browser review uses
+temporary fixture responses and does not mutate the database or add a test suite.
+See `apps/web/README.md` for the new source layout and conventions.
+
+UI verification: desktop and 393px mobile views render without page errors or horizontal overflow. Permission selection blocks empty submissions and sends only selected scopes. Sonner acknowledgements and copy-once credential dialogs work with fixture responses. Production build, types, lint and dependency checks are recorded separately from live backend acceptance.
