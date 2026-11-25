@@ -1,6 +1,13 @@
 {
   "version": 2,
   "skills": {
+    "8-bit-pixel-art-patterns": {
+      "source": "TheOrcDev/8bitcn-ui",
+      "commit": "9642217f41d66d5410cc3fb54a4d582c14bd8d18",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/8-bit-pixel-art-patterns/SKILL.md",
+      "computedHash": "957e7a3891924f93a3946a4f0171ddc704b77c9b86c860359b9c2c9419e78236"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "commit": "57217cf86ba38148a57af9e90d14a4c049558330",
