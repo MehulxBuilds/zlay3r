@@ -1,0 +1,35 @@
+{
+  "name": "@repo/db",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate",
+    "db:migrate_dev": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:push": "prisma db push",
+    "dev": "docker-compose up -d && tsc --watch",
+    "build": "tsc",
+    "lint": "eslint src"
+  },
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./values": "./src/values.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "drizzle-kit": "^1.0.0-rc.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@repo/env": "workspace:*",
+    "@types/pg": "^8.16.0",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^1.0.0-rc.4",
+    "tsx": "^4.21.0"
+  }
+}
