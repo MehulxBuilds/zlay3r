@@ -1,11 +1,13 @@
 import Docker from "dockerode";
 import { randomUUID } from "node:crypto";
-import type { ExecuteResult } from "@platform/shared";
+import type { ExecuteResult } from "@repo/shared";
+import { server_env as env } from "@repo/env";
+import { PassThrough } from "node:stream";
 
 export class DockerSandboxProvider {
   private docker: Docker;
 
-  constructor(socketPath = process.env.DOCKER_SOCKET || "/var/run/docker.sock") {
+  constructor(socketPath = env.DOCKER_SOCKET) {
     this.docker = new Docker({ socketPath });
   }
 
@@ -27,22 +29,26 @@ export class DockerSandboxProvider {
         SecurityOpt: ["no-new-privileges:true"],
         Tmpfs: {
           "/tmp": "rw,noexec,nosuid,size=128m",
-          "/workspace": "rw,nosuid,size=256m"
-        }
-      }
+          "/workspace": "rw,nosuid,size=256m",
+        },
+      },
     });
     await container.start();
     return { resourceId: container.id };
   }
 
-  async execute(resourceId: string, command: string, timeoutMs = 30_000): Promise<ExecuteResult> {
+  async execute(
+    resourceId: string,
+    command: string,
+    timeoutMs = 30_000,
+  ): Promise<ExecuteResult> {
     const container = this.docker.getContainer(resourceId);
     const started = Date.now();
     const exec = await container.exec({
       Cmd: ["sh", "-lc", command],
       AttachStdout: true,
       AttachStderr: true,
-      WorkingDir: "/workspace"
+      WorkingDir: "/workspace",
     });
     const stream = await exec.start({ hijack: true, stdin: false });
 
@@ -52,21 +58,27 @@ export class DockerSandboxProvider {
       let timedOut = false;
       const timer = setTimeout(async () => {
         timedOut = true;
-        try { stream.destroy(); } catch {}
+        try {
+          stream.destroy();
+        } catch {}
         resolve({
           exitCode: null,
           stdout,
           stderr: stderr + "\nExecution timed out",
           durationMs: Date.now() - started,
-          timedOut: true
+          timedOut: true,
         });
       }, timeoutMs);
 
-      this.docker.modem.demuxStream(
-        stream,
-        { write: (chunk: Buffer) => { stdout += chunk.toString(); } },
-        { write: (chunk: Buffer) => { stderr += chunk.toString(); } }
-      );
+      const out = new PassThrough();
+      const err = new PassThrough();
+      out.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString();
+      });
+      err.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      this.docker.modem.demuxStream(stream, out, err);
 
       stream.on("end", async () => {
         if (timedOut) return;
@@ -78,9 +90,11 @@ export class DockerSandboxProvider {
             stdout,
             stderr,
             durationMs: Date.now() - started,
-            timedOut: false
+            timedOut: false,
           });
-        } catch (error) { reject(error); }
+        } catch (error) {
+          reject(error);
+        }
       });
       stream.on("error", (error: Error) => {
         clearTimeout(timer);
@@ -91,7 +105,9 @@ export class DockerSandboxProvider {
 
   async destroy(resourceId: string) {
     const container = this.docker.getContainer(resourceId);
-    try { await container.stop({ t: 5 }); } catch {}
+    try {
+      await container.stop({ t: 5 });
+    } catch {}
     await container.remove({ force: true });
   }
 }

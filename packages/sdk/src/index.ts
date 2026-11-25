@@ -1,16 +1,14 @@
 export class AgentPlatformClient {
-  constructor(
-    private readonly options: { baseUrl: string; apiKey: string }
-  ) { }
+  constructor(private readonly options: { baseUrl: string; token: string }) {}
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await fetch(`${this.options.baseUrl}${path}`, {
       ...init,
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${this.options.apiKey}`,
-        ...init.headers
-      }
+        authorization: `Bearer ${this.options.token}`,
+        ...init.headers,
+      },
     });
     if (!response.ok) {
       throw new Error(`API ${response.status}: ${await response.text()}`);
@@ -22,7 +20,7 @@ export class AgentPlatformClient {
   createSandbox(input: { name?: string; memoryMb?: number; cpu?: number }) {
     return this.request("/v1/sandboxes", {
       method: "POST",
-      body: JSON.stringify(input)
+      body: JSON.stringify(input),
     });
   }
 
@@ -33,14 +31,14 @@ export class AgentPlatformClient {
   execute(sandboxId: string, command: string) {
     return this.request(`/v1/sandboxes/${sandboxId}/exec`, {
       method: "POST",
-      body: JSON.stringify({ command })
+      body: JSON.stringify({ command }),
     });
   }
 
   createRun(input: { sandboxId: string; task: string }) {
     return this.request("/v1/runs", {
       method: "POST",
-      body: JSON.stringify(input)
+      body: JSON.stringify(input),
     });
   }
 
@@ -50,7 +48,7 @@ export class AgentPlatformClient {
 
   destroySandbox(sandboxId: string) {
     return this.request(`/v1/sandboxes/${sandboxId}`, {
-      method: "DELETE"
+      method: "DELETE",
     });
   }
 }

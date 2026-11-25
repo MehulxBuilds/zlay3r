@@ -1,10 +1,21 @@
 {
-  "name": "@platform/observability",
+  "name": "@repo/observability",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "pino": "^9.6.0" },
-  "devDependencies": { "typescript": "^5.8.3" }
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pino": "9.6.0",
+    "@repo/env": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "22.19.11"
+  }
 }

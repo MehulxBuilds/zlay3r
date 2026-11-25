@@ -1,10 +1,10 @@
-import { drizzle as neonDrizzle } from "drizzle-orm/neon-http";
-import { drizzle as nodeDrizzle } from "drizzle-orm/node-postgres";
-import { env } from "./env";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import { server_env as env } from "@repo/env";
+import * as schema from "../schema/index";
 
-const isProd = env.NODE_ENV === "production";
-const client = isProd
-  ? neonDrizzle({ connection: env.DATABASE_URL })
-  : nodeDrizzle({ connection: env.DATABASE_URL });
-
-export { client };
+export const pool = new pg.Pool({
+  connectionString: env.DATABASE_URL,
+  connectionTimeoutMillis: 5000,
+});
+export const db = drizzle(pool, { schema });

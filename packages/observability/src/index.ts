@@ -1,7 +1,8 @@
 import pino from "pino";
+import { server_env as env } from "@repo/env";
 
 export const logger = pino({
-  level: process.env.LOG_LEVEL || "info",
+  level: env.LOG_LEVEL,
   redact: {
     paths: [
       "password",
@@ -10,10 +11,10 @@ export const logger = pino({
       "authorization",
       "headers.authorization",
       "secret",
-      "ciphertext"
+      "ciphertext",
     ],
-    censor: "[REDACTED]"
+    censor: "[REDACTED]",
   },
   base: { service: "agent-platform" },
-  timestamp: pino.stdTimeFunctions.isoTime
+  timestamp: pino.stdTimeFunctions.isoTime,
 });
