@@ -85,13 +85,11 @@ export async function buildApp(dependencies: AppDependencies) {
   });
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof SandboxError) {
-      return reply
-        .code(error.statusCode)
-        .send({
-          error: error.code,
-          message: error.message,
-          requestId: request.id,
-        });
+      return reply.code(error.statusCode).send({
+        error: error.code,
+        message: error.message,
+        requestId: request.id,
+      });
     }
     if (error instanceof StorageError)
       return reply
@@ -142,7 +140,11 @@ export async function buildApp(dependencies: AppDependencies) {
         error: statusCode === 429 ? "TOO_MANY_REQUESTS" : "BAD_REQUEST",
       });
     request.log.error({ err: error }, "Request failed");
-    return reply.code(500).send({ error: "INTERNAL_SERVER_ERROR" });
+    return reply.code(500).send({
+      error: "INTERNAL_SERVER_ERROR",
+      message: `An unexpected server error occurred. Check server logs using request ID ${request.id}.`,
+      requestId: request.id,
+    });
   });
   app.get("/health", async () => ({ ok: true }));
   app.get("/health/ready", async (_request, reply) => {

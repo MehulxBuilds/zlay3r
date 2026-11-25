@@ -6,10 +6,10 @@ import type { ExecuteResult } from "@repo/shared";
 import { span } from "@repo/observability";
 
 export class SandboxError extends Error {
-  readonly statusCode = 503;
   constructor(
     readonly code: string,
     message: string,
+    readonly statusCode = 503,
   ) {
     super(message);
   }
@@ -255,8 +255,32 @@ export class DockerSandboxProvider implements SandboxProvider {
             result: T;
             error?: string;
           };
-          if (response.error) reject(new Error(response.error));
-          else resolve(response.result);
+          if (response.error) {
+            const fileErrors: Record<string, string> = {
+              IsADirectoryError:
+                "This path is a directory. Choose a file path to read or save text.",
+              NotADirectoryError:
+                "A component of this path is a file, not a directory.",
+              FileNotFoundError:
+                "The path or its parent directory does not exist.",
+              FileExistsError:
+                "A file or directory already exists at this path.",
+              PermissionError:
+                "The sandbox does not have permission to access this path.",
+              PATH_OUTSIDE_WORKSPACE: "Choose a path inside /workspace.",
+              WORKSPACE_ROOT_PROTECTED:
+                "The workspace root cannot be changed. Choose a file or subdirectory.",
+              SYMLINK_NOT_ALLOWED:
+                "Symbolic links cannot be accessed by file operations.",
+              NOT_REGULAR_FILE: "This operation requires a regular file.",
+              FILE_TOO_LARGE: "The file exceeds the 8 MB file-operation limit.",
+              INVALID_PATH: "Enter a valid workspace path.",
+            };
+            const message = fileErrors[response.error];
+            if (message) {
+              reject(new SandboxError(response.error, message, 400));
+            } else reject(new Error(response.error));
+          } else resolve(response.result);
         } catch {
           reject(new Error("SANDBOX_HELPER_UNAVAILABLE"));
         }
