@@ -9,6 +9,8 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
+    "@dicebear/core": "^10.7.0",
+    "@dicebear/styles": "^10.6.0",
     "@react-oauth/google": "0.13.5",
     "@repo/sdk": "workspace:*",
     "@repo/shared": "workspace:*",

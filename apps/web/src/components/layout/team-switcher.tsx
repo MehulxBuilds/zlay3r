@@ -12,15 +12,20 @@ import {
   SidebarMenuButton,
   useSidebar,
   Skeleton,
+  Avatar,
+  AvatarImage,
+  AvatarFallback,
 } from "@repo/ui";
 import { useOrganizations } from "@repo/web/hooks/api/organizations";
 import { useWorkspaceStore } from "@repo/web/stores/workspace-store";
+import { orgAvatar } from "../shared/app-avatar";
 export function TeamSwitcher() {
   const { data, isPending } = useOrganizations();
   const selected = useWorkspaceStore((state) => state.organizationId);
   const setOrganization = useWorkspaceStore((state) => state.setOrganization);
   const { isMobile } = useSidebar();
   const active = data?.find((organization) => organization.id === selected);
+  const avatarUrl = orgAvatar({ seed: selected });
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -34,7 +39,12 @@ export function TeamSwitcher() {
                 className="border border-sidebar-border"
               >
                 <div className="grid size-8 shrink-0 place-items-center bg-primary">
-                  <Box className="size-4" />
+                  <Avatar className="size-8">
+                    <AvatarImage src={avatarUrl} alt={avatarUrl} />
+                    <AvatarFallback className="bg-primary/30 text-forest">
+                      <Box className="size-4" />
+                    </AvatarFallback>
+                  </Avatar>
                 </div>
                 <div className="grid flex-1 text-left leading-tight">
                   <span className="truncate font-semibold">
@@ -59,7 +69,12 @@ export function TeamSwitcher() {
                   key={organization.id}
                   onSelect={() => setOrganization(organization.id)}
                 >
-                  <Box className="size-4" />
+                   <Avatar className="size-8">
+                    <AvatarImage src={avatarUrl} alt={avatarUrl} />
+                    <AvatarFallback className="bg-primary/30 text-forest">
+                      <Box className="size-4" />
+                    </AvatarFallback>
+                  </Avatar>
                   <span className="flex-1 truncate">{organization.name}</span>
                   {organization.id === selected && <Check className="size-4" />}
                 </DropdownMenuItem>

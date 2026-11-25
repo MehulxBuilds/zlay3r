@@ -3,6 +3,7 @@ import { ChevronsUpDown, LogOut } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
+  AvatarImage,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -16,9 +17,12 @@ import {
 } from "@repo/ui";
 import type { User } from "@repo/web/lib/schemas";
 import { useSignOut } from "@repo/web/hooks/api/auth";
+import { userAvatar } from "../shared/app-avatar";
 export function NavUser({ user }: { user: User }) {
   const signOut = useSignOut();
   const { isMobile } = useSidebar();
+  const avatarUrl = userAvatar({ seed: user.name });
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -26,6 +30,7 @@ export function NavUser({ user }: { user: User }) {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton size="lg">
               <Avatar className="size-8">
+                <AvatarImage src={avatarUrl} alt={user.name} />
                 <AvatarFallback className="bg-primary/30 text-forest">
                   {user.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
