@@ -1,13 +1,13 @@
 # Zlayer
 
-An agentic sandbox control plane for running autonomous AI agents inside isolated Docker containers with host-brokered LLM calls, policy-enforced tool execution, resumable event streaming, and an organization-scoped workspace UI.
+An agentic sandbox control plane for running autonomous AI agents inside Kata-backed Docker sandboxes with host-brokered LLM calls, policy-enforced tool execution, resumable event streaming, and an organization-scoped workspace UI.
 
 ---
 
 ## Key Capabilities
 
-- **Isolated Sandbox Execution** — Runs the credential-free agent loop (`@repo/agent-runner`) inside non-root Docker containers (`1000:1000` in `/workspace`) with bounded shell, filesystem, and browser helpers.
-- **Host-Brokered Security Model** — Model API keys, organization secrets, and tool authorization never enter the sandbox. The runner requests model generations, tool calls, and checkpoints over a private `stdin`/`stdout` RPC channel (`agentChannel`) supervised by the host worker.
+- **Isolated Sandbox Execution** — Docker selects the host-registered `kata` runtime to run each sandbox with a guest Linux kernel. The credential-free agent loop (`@repo/agent-runner`) and helpers run as `1000:1000` in `/workspace`; the creation API and UI require at least 512 MB for Kata.
+- **Host-Brokered Security Model** — Model provider keys remain on the worker. The runner requests model generations, tool calls, and checkpoints over a private `stdin`/`stdout` RPC channel (`agentChannel`), and the worker checks authorization. Secrets explicitly passed to an approved tool remain accessible to that tool inside the sandbox.
 - **Multi-Provider Model Gateway** — Supports **Anthropic**, **OpenAI**, **DeepSeek**, and **OpenRouter** with per-organization encrypted credentials, model aliases, explicit fallback order, and token/iteration budget enforcement.
 - **Governance, Policies & Approvals** — Scoped API keys, RBAC (`owner`, `admin`, `developer`, `viewer`), execution policies, one-use approval gates, usage metering, and durable audit logs.
 - **Resumable Sessions & Streaming** — Persistent conversation sessions, monotonically sequenced run events, SSE streaming (`Last-Event-ID`), and checkpointing.
@@ -42,9 +42,9 @@ flowchart TB
     subgraph Execution["Worker & Isolated Sandboxes"]
         Worker["apps/worker\nBullMQ Worker + Outbox Publisher\n& Agent Supervisor"]
         Runtime["packages/agent-runtime\nModelRouter (Anthropic, OpenAI,\nDeepSeek, OpenRouter) & Tool Policy"]
-        subgraph Container["Docker Sandbox Container (packages/sandbox)"]
+        subgraph Container["Kata VM / guest kernel + Docker sandbox (packages/sandbox)"]
             Runner["packages/agent-runner\nCredential-free Agent Loop\n(/opt/zlayer/agent-runner.mjs)"]
-            Helpers["Sandbox Helpers\nShell, Filesystem (filesystem.py),\nBrowser (helper.mjs)"]
+            Helpers["Sandbox Helpers\nPython: filesystem.py\nNode: helper.mjs (shell / browser / MCP)"]
         end
     end
 
@@ -65,7 +65,8 @@ flowchart TB
     Worker -->|"Upload Artifacts"| R2
     Worker --> Runtime
     Worker <-->|"Docker Exec stdin/stdout\nagentChannel RPC"| Runner
-    Runner -->|"Local Workspace Ops\n(via Host Tool Calls)"| Helpers
+    Runner -->|"Tool request over private RPC"| Worker
+    Worker -->|"Authorize, then Docker exec"| Helpers
 
     HTTP -.-> Obs
     Worker -.-> Obs
@@ -81,7 +82,7 @@ sequenceDiagram
     participant DB as PostgreSQL (@repo/db)
     participant Redis as Redis (BullMQ)
     participant Worker as apps/worker (Supervisor)
-    participant Sandbox as Docker Container (agent-runner)
+    participant Sandbox as Kata Sandbox (agent-runner)
     participant LLM as LLM Provider (Anthropic / OpenAI / DeepSeek / OpenRouter)
 
     User->>API: POST /v1/runs (task, sandboxId, sessionId)
@@ -90,7 +91,8 @@ sequenceDiagram
 
     Worker->>DB: Outbox publisher polls pending records
     Worker->>Redis: Enqueue job (agent-runs)
-    Worker->>Redis: Claim job & acquire sandbox lease
+    Worker->>Redis: Claim job
+    Worker->>DB: Acquire run lease and serialize sandbox agent claims
 
     Worker->>Sandbox: docker exec node /opt/zlayer/agent-runner.mjs
     Worker->>Sandbox: agentChannel.request("run", launch)
@@ -99,7 +101,7 @@ sequenceDiagram
         Sandbox->>Worker: RPC "model.generate" (messages, maxTokens)
         Worker->>Worker: Check iteration & token budgets
         Worker->>LLM: Call ModelRouter with decrypted org key
-        LLM-->>Worker: Text delta + tool calls + token usage
+        LLM-->>Worker: Text / tool calls + token usage
         Worker->>DB: Persist model.delta / usage events
         Worker-->>Sandbox: ModelResult
 
@@ -118,6 +120,28 @@ sequenceDiagram
     User->>API: GET /v1/runs/:id/events (SSE with Last-Event-ID)
     API-->>User: Streamed execution events
 ```
+
+---
+
+### Sandbox Image and Helper Processes
+
+The [Dockerfile](packages/sandbox/image/Dockerfile) builds the agent bundle with
+Bun, then copies it into a Node 22 Debian image containing Python, Chromium and
+the MCP client SDK. The build excludes `.env` files. `tini` supervises processes,
+and `sleep infinity` keeps the sandbox available for Docker exec requests.
+Kata is installed on the Docker host; it is not installed inside this image.
+
+| Process inside the sandbox            | Purpose                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------ |
+| `node /opt/zlayer/agent-runner.mjs`   | Agent loop with a persistent private worker supervision channel          |
+| `python3 /opt/zlayer/filesystem.py`   | One bounded JSON-line file request on stdin, one JSON response on stdout |
+| `node /opt/zlayer/helper.mjs --stdin` | Shell execution and requests to the sandbox's local service process      |
+
+File operations launch Python directly. MCP and Playwright load only when their
+features are used. The provider passes executable arguments directly to Docker
+exec; request data travels separately through stdin. There is no old-image
+adapter: rebuild the image and create fresh sandboxes when its helper protocol
+changes. See [architecture](ARCHITECTURE.md#sandbox-image-and-execution-protocols).
 
 ---
 
@@ -157,9 +181,14 @@ sequenceDiagram
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) (`1.3.5+`)
-- [Node.js](https://nodejs.org/) (`>= 18`, used via `tsx` by `apps/http` and `apps/worker` for Docker named-pipe compatibility)
-- [Docker](https://www.docker.com/) (Docker Desktop / Engine)
+- [Bun](https://bun.sh/) (`1.3.5`, matching the workspace package manager)
+- [Node.js](https://nodejs.org/) (`>= 20`; the configured Ubuntu setup uses Node 22 and `tsx`)
+- Linux Docker Engine 28+, KVM and a registered Kata runtime on the sandbox host
+
+For Windows development, the backend uses **Ubuntu WSL's native Docker Engine**.
+Docker Desktop is a separate engine with a separate image store. Installing Kata
+inside Ubuntu does not register it with Docker Desktop. Follow the
+[Kata setup guide](docs/kata-runtime.md) before creating sandboxes.
 
 ### 1. Install dependencies & start infrastructure
 
@@ -175,7 +204,8 @@ docker compose up -d
 
 ### 2. Configure environment
 
-Create a root `.env` from `.env.example`:
+For a fresh checkout, create the single root `.env` from `.env.example`. Preserve
+an existing `.env`, especially its encryption key. No per-app env files are needed.
 
 ```sh
 cp .env.example .env
@@ -188,13 +218,16 @@ Key variables in `.env`:
 - `GOOGLE_CLIENT_ID` & `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — Optional Google OAuth sign-in.
 - `ENCRYPTION_KEY` — Required for encrypting organization provider keys and secrets.
 - `SANDBOX_IMAGE` — Docker sandbox image (default `zlayer-sandbox:local`).
+- `SANDBOX_RUNTIME=kata` / `DOCKER_SOCKET=/var/run/docker.sock` — Native Linux Docker runtime and socket for the Ubuntu backend.
 - `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — Private Cloudflare R2 storage for artifacts.
 
 See [ENVIRONMENT.md](ENVIRONMENT.md) for full configuration and sandbox image build instructions.
 
-### 3. Push database schema
+### 3. Initialize a fresh database only when needed
 
-No install, build, or startup command automatically alters your database. Review `packages/db/schema/index.ts` and push the schema explicitly:
+No install, build, or startup command automatically alters your database. For a
+new database, review the schema and apply it explicitly. Skip this step for an
+already configured database unless you intend to change its schema:
 
 ```sh
 bun run db:push
@@ -202,7 +235,13 @@ bun run db:push
 
 ### 4. Build the sandbox image
 
-Build the helper/runner image before creating sandboxes (see [ENVIRONMENT.md](ENVIRONMENT.md)):
+For this Windows/Ubuntu setup, build directly into the Docker engine used by the backend:
+
+```powershell
+bun run sandbox:build:wsl
+```
+
+On a Linux host where the CLI and backend use the same Docker engine:
 
 ```sh
 bun run sandbox:build
@@ -210,9 +249,20 @@ bun run sandbox:build
 
 ### 5. Run the development stack
 
-```sh
-bun run dev
+From two Windows terminals in the repository root:
+
+```powershell
+# Terminal 1: API and worker inside Ubuntu WSL
+bun run dev:backend:wsl
+
+# Terminal 2: web app on Windows
+bun run --cwd apps/web dev
 ```
+
+Do not also run `bun run dev` in Windows: that starts another backend targeting
+Docker Desktop's named pipe. The WSL launcher uses the existing source checkout
+and root `.env`; it does not initialize databases. On a fully Linux development
+host with its tools and Docker configured, use `bun run dev` normally.
 
 - **Web Control Plane:** `http://localhost:3000`
 - **HTTP API:** `http://localhost:3001`
@@ -227,9 +277,19 @@ bun run check-dependencies   # Enforce single resolved dependency versions acros
 bun run check-types          # TypeScript type-checking via Turborepo
 bun run lint                 # Biome lint across apps, packages, and scripts
 bun run format               # Prettier formatting across *.ts, *.tsx, *.md
-bun run test                 # Run HTTP contract tests (in-memory auth repository)
+bun run test                 # HTTP, MCP, agent supervisor and sandbox contract tests
 bun run build                # Build all apps and packages
 ```
+
+Opt-in integration checks create and remove temporary sandboxes without touching
+application databases. Run them on the configured Linux sandbox host:
+
+```sh
+bun run sandbox:smoke-image  # Files, path restrictions, shell, MCP stdio and Chromium
+bun run sandbox:smoke-agent  # Agent broker, approvals/resume, cancellation and cleanup
+```
+
+The [Kata guide](docs/kata-runtime.md) includes the PowerShell-to-WSL equivalents.
 
 ---
 
@@ -239,6 +299,7 @@ bun run build                # Build all apps and packages
 - [ENVIRONMENT.md](ENVIRONMENT.md) — Environment variables, Docker sandbox image, and R2 setup
 - [SECURITY.md](SECURITY.md) — Security boundaries, trust model, and known limitations
 - [docs/sandbox-agents.md](docs/sandbox-agents.md) — In-sandbox agent runner & host supervisor protocol
+- [docs/kata-runtime.md](docs/kata-runtime.md) — Kata host setup, separate Docker engines, image builds and live checks
 - [docs/mcp-architecture.md](docs/mcp-architecture.md) — Remote MCP server architecture
 - [apps/http/README.md](apps/http/README.md) — HTTP API endpoints and OpenAPI contract
 - [packages/sdk/README.md](packages/sdk/README.md) — TypeScript SDK usage

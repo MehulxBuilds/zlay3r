@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { server_env as env } from "@repo/env";
 import { DockerSandboxProvider } from "@repo/sandbox";
 import { ToolRegistry, type ModelGateway } from "@repo/agent-runtime/core";
 import { runSandboxAgent } from "./agent-supervisor";
 import type { AgentLaunch } from "@repo/agent-runner/contracts";
 
 // Explicit opt-in Docker check. No DB, queues, provider API or user resources.
-env.SANDBOX_IMAGE = "zlayer-sandbox:agent-runner";
 const provider = new DockerSandboxProvider();
 const { resourceId } = await provider.create({
   name: `agent-smoke-${randomUUID().slice(0, 8)}`,
