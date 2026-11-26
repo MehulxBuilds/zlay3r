@@ -4,7 +4,7 @@ import { PassThrough } from "node:stream";
 import { setTimeout as delay } from "node:timers/promises";
 import { server_env as env } from "@repo/env";
 import type { ExecuteResult } from "@repo/shared";
-import { span } from "@repo/observability";
+import { span } from "@repo/observability/trace";
 import {
   agentChannel,
   AgentRemoteError,
@@ -98,6 +98,12 @@ export class DockerSandboxProvider implements SandboxProvider {
     signal.addEventListener("abort", abort, { once: true });
     try {
       const info = await container.inspect();
+      if (info.HostConfig.Runtime !== env.SANDBOX_RUNTIME) {
+        throw new SandboxError(
+          "SANDBOX_RUNTIME_MISMATCH",
+          "This sandbox uses a different runtime. Create a new sandbox with the configured SANDBOX_RUNTIME.",
+        );
+      }
       const image = await this.docker.getImage(info.Image).inspect();
       if (image.Config?.Labels?.["zlayer.agent-runner"] !== "1")
         throw new Error("SANDBOX_RUNNER_IMAGE_REQUIRED");
@@ -181,6 +187,19 @@ export class DockerSandboxProvider implements SandboxProvider {
       throw new SandboxError(
         "DOCKER_VERSION_UNSUPPORTED",
         "Sandbox isolation requires Docker Engine 28 or newer.",
+      );
+    }
+    const info = await this.docker.info();
+    if (info.OSType !== "linux") {
+      throw new SandboxError(
+        "SANDBOX_LINUX_REQUIRED",
+        "Sandbox isolation requires a Linux Docker Engine.",
+      );
+    }
+    if (!Object.hasOwn(info.Runtimes ?? {}, env.SANDBOX_RUNTIME)) {
+      throw new SandboxError(
+        "SANDBOX_RUNTIME_UNAVAILABLE",
+        `Docker has no registered ${env.SANDBOX_RUNTIME} runtime. Install and register Kata on the Docker host. See docs/kata-runtime.md. No fallback runtime will be used.`,
       );
     }
     try {
@@ -284,6 +303,7 @@ export class DockerSandboxProvider implements SandboxProvider {
             ]
           : [],
         HostConfig: {
+          Runtime: env.SANDBOX_RUNTIME,
           Memory: input.memoryMb * 1048576,
           NanoCpus: Math.floor(input.cpu * 1e9),
           PidsLimit: 128,
@@ -324,20 +344,22 @@ export class DockerSandboxProvider implements SandboxProvider {
     resourceId: string,
     input: Record<string, unknown>,
     user = "1000:1000",
+    command = ["node", "/opt/zlayer/helper.mjs", "--stdin"],
   ): Promise<T> {
     return span(
       `sandbox.${String(input.op)}`,
       { "sandbox.resource": resourceId },
-      () => this.invokeRaw<T>(resourceId, input, user),
+      () => this.invokeRaw<T>(resourceId, input, user, command),
     );
   }
   private async invokeRaw<T>(
     resourceId: string,
     input: Record<string, unknown>,
     user: string,
+    command: string[],
   ): Promise<T> {
     const exec = await this.docker.getContainer(resourceId).exec({
-      Cmd: ["node", "/opt/zlayer/helper.mjs", "--stdin"],
+      Cmd: command,
       User: user,
       AttachStdout: true,
       AttachStderr: true,
@@ -443,7 +465,10 @@ export class DockerSandboxProvider implements SandboxProvider {
     await this.invoke(id, { op: "cancel", id: executionId });
   }
   file<T>(id: string, operation: Record<string, unknown>) {
-    return this.invoke<T>(id, operation, "1000:1000");
+    return this.invoke<T>(id, operation, "1000:1000", [
+      "python3",
+      "/opt/zlayer/filesystem.py",
+    ]);
   }
   async service<T>(id: string, action: Record<string, unknown>) {
     if (action.op === "browser.create") {

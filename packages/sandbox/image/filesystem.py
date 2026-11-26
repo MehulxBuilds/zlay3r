@@ -106,7 +106,11 @@ def main(request):
 
 
 try:
-  request = json.loads(sys.stdin.read(12 * 1024 * 1024))
+  # One bounded JSON line per process; EOF also terminates the last line.
+  request_line = sys.stdin.buffer.readline(12 * 1024 * 1024 + 1)
+  if len(request_line) > 12 * 1024 * 1024:
+    raise ValueError("REQUEST_TOO_LARGE")
+  request = json.loads(request_line)
   print(json.dumps({"result": main(request)}))
 except Exception as error:
   print(json.dumps({"error": str(error) if isinstance(error, ValueError) else type(error).__name__}))

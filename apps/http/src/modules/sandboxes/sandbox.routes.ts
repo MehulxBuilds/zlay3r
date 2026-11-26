@@ -6,6 +6,11 @@ import { readPage, sendPage } from "../../lib/pagination";
 import { authorize } from "../platform/authorization";
 
 const params = z.object({ id: z.string().min(1).max(100) });
+const memoryMb = z
+  .number()
+  .int()
+  .max(2048)
+  .default(512);
 export function registerSandboxRoutes(
   app: FastifyInstance,
   service: SandboxService,
@@ -39,7 +44,7 @@ export function registerSandboxRoutes(
               .max(40)
               .regex(/^[a-zA-Z0-9_-]+$/)
               .default("sandbox"),
-            memoryMb: z.number().int().min(128).max(2048).default(512),
+            memoryMb,
             cpu: z.number().min(0.25).max(2).default(1),
           }),
         ),
@@ -56,7 +61,7 @@ export function registerSandboxRoutes(
             .max(40)
             .regex(/^[a-zA-Z0-9_-]+$/)
             .default("sandbox"),
-          memoryMb: z.number().int().min(128).max(2048).default(512),
+          memoryMb,
           cpu: z.number().min(0.25).max(2).default(1),
         })
         .parse(request.body);

@@ -22,6 +22,7 @@ export const ServerEnvSchema = z.object({
   WEB_URL: z.url().default("http://localhost:3000"),
   GOOGLE_CLIENT_ID: z.string().default(""),
   SANDBOX_IMAGE: z.string().default("zlayer-sandbox:local"),
+  SANDBOX_RUNTIME: z.string().trim().min(1).default("kata"),
   INSTANCE_ID: z
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)

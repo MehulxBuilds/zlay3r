@@ -80,7 +80,7 @@ export function SandboxesView({ writable }: { writable: boolean }) {
                     <ChoiceSelect
                       name="memoryMb"
                       defaultValue="512"
-                      options={[128, 256, 512, 1024, 2048].map((value) => ({
+                      options={[512, 1024, 2048].map((value) => ({
                         value: String(value),
                         label: `${value} MB`,
                       }))}

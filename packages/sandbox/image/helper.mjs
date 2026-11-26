@@ -1,4 +1,3 @@
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { spawn } from "node:child_process";
 import {
   mkdir,
@@ -161,7 +160,6 @@ async function serviceRequest(body) {
   });
 }
 if (input.op === "service") {
-  const { chromium } = await import("playwright");
   const sessions = new Map();
   const mcpProcesses = new Map();
   let browser;
@@ -181,6 +179,7 @@ if (input.op === "service") {
       let result;
       if (action.op === "ping") result = { ready: true };
       else if (action.op === "browser.create") {
+        const { chromium } = await import("playwright");
         if (sessions.has(action.id))
           await sessions.get(action.id).context.close();
         if (sessions.size >= 10 && !sessions.has(action.id))
@@ -280,6 +279,8 @@ if (input.op === "service") {
           return;
         }
         if (!session) {
+          const { StdioClientTransport } =
+            await import("@modelcontextprotocol/client/stdio");
           const transport = new StdioClientTransport({
             command: action.command,
             args: action.args ?? [],

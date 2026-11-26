@@ -5,6 +5,7 @@ RUN bun install --frozen-lockfile --ignore-scripts && bun run --cwd packages/age
 
 FROM node:22-bookworm-slim
 LABEL zlayer.agent-runner="1"
+LABEL zlayer.filesystem-protocol="json-line-v1"
 RUN apt-get update && apt-get install -y --no-install-recommends tini python3 && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/zlayer
 RUN npm install --omit=dev --save-exact playwright@1.65.1 ipaddr.js@2.5.0 @modelcontextprotocol/client@2.4.0 && npx playwright install --with-deps chromium && mv /root/.cache/ms-playwright /opt/zlayer/browsers && chmod -R a+rX /opt/zlayer/browsers

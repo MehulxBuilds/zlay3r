@@ -1,5 +1,9 @@
 # Agents inside sandboxes
 
+New sandboxes default to the registered `kata` runtime, with no fallback.
+See [Kata host setup and acceptance checks](kata-runtime.md). The host installation
+and live runtime checks must be completed before using these sandboxes.
+
 The agent loop runs as UID 1000 in the assigned Docker sandbox. The worker starts
 `/opt/zlayer/agent-runner.mjs` through Docker exec, with a private stdin/stdout
 supervision channel. No agent control port, API key or inbound network route is

@@ -42,9 +42,11 @@ Network access defaults to none. Allowed public hosts use an HTTP(S) proxy that
 pins DNS results and rejects non-public IP ranges. An isolated internal Docker
 bridge and disabled container DNS prevent direct external connections. Docker 28+
 is required. HTTP MCP connections also pin public DNS destinations and require an
-explicit host allowlist. Containers are not equivalent to VMs: host/kernel isolation,
-Docker configuration, browser escapes and DNS/egress behavior require the deferred
-security and live integration review before handling hostile workloads.
+explicit host allowlist. New sandboxes select Kata by default and reject missing
+runtimes. Kata provides a guest kernel boundary once installed and validated;
+the egress proxy retains the daemon default runtime. Docker configuration, browser
+escapes and DNS/egress behavior still require live integration review before
+handling hostile workloads. See [Kata setup](docs/kata-runtime.md).
 
 R2 objects are private. Tenant checks precede signed downloads, which expire after
 five minutes. R2 credentials need object access only for the configured bucket.

@@ -20,7 +20,7 @@ export const createSandboxSchema = z.object({
     .min(1)
     .max(40)
     .regex(/^[a-zA-Z0-9_-]+$/, "Use letters, numbers, underscores or hyphens"),
-  memoryMb: z.coerce.number().int().min(128).max(2048),
+  memoryMb: z.coerce.number().int().min(512).max(2048),
   cpu: z.coerce.number().min(0.25).max(2),
 });
 export const useSandboxes = () =>
