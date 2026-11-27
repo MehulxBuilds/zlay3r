@@ -45,12 +45,16 @@ export function SandboxesView({ writable }: { writable: boolean }) {
   const create = useCreateSandbox();
   const lifecycle = useSandboxLifecycle();
   const destroy = useDestroySandbox();
+  const [sandboxType, setSandboxType] = useState<"KATA" | "FIRECRACKER">(
+    "KATA",
+  );
   const [selected, setSelected] = useState<Sandbox | null>(null);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Each sandbox is a container with its own files and resource limits.
+          Each sandbox has its own isolated environment, files, and resource
+          limits.
         </p>
         {writable && (
           <CreateDialog
@@ -67,6 +71,21 @@ export function SandboxesView({ writable }: { writable: boolean }) {
                   close();
                 }}
               >
+                <Field label="Sandbox type">
+                  <select
+                    name="type"
+                    value={sandboxType}
+                    onChange={(event) =>
+                      setSandboxType(
+                        event.target.value as "KATA" | "FIRECRACKER",
+                      )
+                    }
+                    className="h-10 w-full border bg-[#FFFDF6] px-3 text-sm"
+                  >
+                    <option value="KATA">Kata (Docker)</option>
+                    <option value="FIRECRACKER">Firecracker</option>
+                  </select>
+                </Field>
                 <Field label="Name">
                   <Input
                     name="name"
@@ -88,9 +107,13 @@ export function SandboxesView({ writable }: { writable: boolean }) {
                   </Field>
                   <Field label="CPU cores">
                     <ChoiceSelect
+                      key={sandboxType}
                       name="cpu"
                       defaultValue="1"
-                      options={[0.25, 0.5, 1, 2].map((value) => ({
+                      options={(sandboxType === "FIRECRACKER"
+                        ? [1, 2]
+                        : [0.25, 0.5, 1, 2]
+                      ).map((value) => ({
                         value: String(value),
                         label: String(value),
                       }))}
@@ -132,6 +155,11 @@ export function SandboxesView({ writable }: { writable: boolean }) {
                 </div>
               </div>
             ),
+          },
+          {
+            label: "Type",
+            cell: (box) =>
+              box.type === "FIRECRACKER" ? "Firecracker" : "Kata",
           },
           {
             label: "Status",
@@ -222,7 +250,7 @@ export function SandboxesView({ writable }: { writable: boolean }) {
                 </DropdownMenu>
                 <ConfirmAction
                   title={`Destroy ${box.name}?`}
-                  description="The container and its workspace files will be removed. Saved artifacts stay available."
+                  description="The sandbox and its workspace files will be removed. Saved artifacts stay available."
                   action={() => destroy.mutateAsync(box.id)}
                 >
                   <Button

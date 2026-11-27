@@ -13,16 +13,30 @@ import {
   post,
   remove,
 } from "./core";
-export const createSandboxSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1)
-    .max(40)
-    .regex(/^[a-zA-Z0-9_-]+$/, "Use letters, numbers, underscores or hyphens"),
-  memoryMb: z.coerce.number().int().min(512).max(2048),
-  cpu: z.coerce.number().min(0.25).max(2),
-});
+export const createSandboxSchema = z
+  .object({
+    type: z.enum(["KATA", "FIRECRACKER"]).default("KATA"),
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .regex(
+        /^[a-zA-Z0-9_-]+$/,
+        "Use letters, numbers, underscores or hyphens",
+      ),
+    memoryMb: z.coerce.number().int().min(512).max(2048),
+    cpu: z.coerce.number().min(0.25).max(2),
+  })
+  .superRefine((input, context) => {
+    if (input.type === "FIRECRACKER" && !Number.isInteger(input.cpu)) {
+      context.addIssue({
+        code: "custom",
+        path: ["cpu"],
+        message: "Firecracker requires 1 or 2 whole CPU cores.",
+      });
+    }
+  });
 export const useSandboxes = () =>
   useApiPages("sandboxes", "/v1/sandboxes", sandboxSchema, 5000);
 export const useCreateSandbox = () =>

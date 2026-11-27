@@ -12,13 +12,28 @@ agents can use the newly configured runtime.
 
 Kata is registered on **Ubuntu WSL's native Docker Engine**, which is separate
 from Docker Desktop. The native runtime uses
-`/opt/kata/bin/containerd-shim-kata-qemu-v2` and the existing Kata QEMU guest
+`/usr/local/bin/containerd-shim-kata-v2` and the existing Kata QEMU guest
 configuration. Linux Bun 1.3.5 and Node 22 are installed under
 `/opt/zlayer-tools`, with executables linked in `/usr/local/bin`. The normal
 Ubuntu user has Docker socket access.
 
 Keep `SANDBOX_RUNTIME=kata`, `SANDBOX_IMAGE=zlayer-sandbox:local` and
-`DOCKER_SOCKET=/var/run/docker.sock` in the single root `.env`.
+`DOCKER_SOCKET=/run/zlayer-docker.sock` in the single root `.env`.
+Ubuntu's `zlayer-kata` Docker context points to `unix:///run/zlayer-docker.sock`.
+The native daemon listens there in addition to its original socket through
+`/etc/systemd/system/docker.service.d/20-zlayer-socket.conf`. Docker Desktop can
+replace `/run/docker.sock` when WSL integration starts; this dedicated endpoint
+keeps ZLayer connected to the native engine. Windows Docker Desktop remains a
+separate engine and image store. Docker live restore is enabled on the native
+engine so planned daemon restarts can preserve running containers.
+
+The WSL-specific Kata wrapper creates a private mount namespace and, when
+present, unmounts `/Docker/host` only inside that namespace. The installed Rust
+shim cannot parse Docker Desktop's mount entry containing `Program Files`.
+The wrapper then executes the same Kata QEMU shim; it does not change the
+runtime or fall back to runc. The host's Docker Desktop mount stays intact.
+This workaround is specific to this WSL development host.
+
 Run these commands in separate Windows terminals from the repository root:
 
 ```powershell

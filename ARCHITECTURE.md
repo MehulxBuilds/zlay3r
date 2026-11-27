@@ -7,7 +7,9 @@ API and worker scripts run on Node through `tsx`. In the configured Windows
 development setup, they run inside Ubuntu WSL against its native Docker Engine;
 the web application runs on Windows. Docker selects the registered Kata runtime
 for sandbox containers. Kata gives those workloads a guest Linux kernel while
-Docker remains responsible for images, lifecycle and exec operations.
+Docker remains responsible for images, lifecycle and exec operations. A second
+Firecracker provider uses a privileged local host manager and a guest vsock
+supervisor. Each sandbox persists its selected type; both providers coexist.
 
 ## Boundaries
 
@@ -22,7 +24,7 @@ Docker remains responsible for images, lifecycle and exec operations.
 | `apps/web/src/components`              | Pixel dashboard, settings and workspace controls             |
 | `packages/agent-runtime`               | Provider adapters, model router, tool registry and MCP       |
 | `packages/agent-runner`                | Credential-free agent loop executed inside the sandbox       |
-| `packages/sandbox`                     | Docker lifecycle and bounded execution bridge                |
+| `packages/sandbox`                     | Provider routing, Docker/Kata and Firecracker lifecycle      |
 | `packages/sandbox/image`               | Non-root shell/filesystem/browser/MCP helper source          |
 | `packages/storage`                     | Private R2 objects, checksums, metadata and signed downloads |
 | `packages/db`                          | Drizzle schema, permissions, encryption, events and metering |
@@ -39,7 +41,7 @@ stable BullMQ job ID and retries delivery. A worker claims only queued records,
 sets a lease, and fences writes with lease owner and attempt number.
 
 The worker starts the agent runner inside the assigned sandbox through a private
-Docker exec channel. It holds provider credentials and brokers model/tool access;
+Docker exec or Firecracker vsock channel. It holds provider credentials and brokers model/tool access;
 the agent loop, message assembly and tool selection run in the sandbox. Per-sandbox
 claims serialize agent runs across workers. Checkpoints and usage counters are
 validated and persisted by the supervisor, never accepted as billing authority
@@ -136,6 +138,35 @@ Protocol changes require rebuilding the image and creating fresh sandboxes. A
 new tag does not update existing containers, and the provider assumes the rebuilt
 image is used rather than adapting requests for older helpers.
 
+## Firecracker provider boundary
+
+`SandboxRouter` creates the selected `KATA` or `FIRECRACKER` type. Existing Docker
+IDs route to `DockerSandboxProvider`; `firecracker:<uuid>` IDs route to
+`FirecrackerSandboxProvider`. This identity survives API/worker restarts. The
+creation service stores the type, provider and image label alongside that ID.
+
+The Firecracker provider talks to a permission-restricted Unix socket. The Linux
+host manager owns jailer, cgroup v2 limits, immutable rootfs/kernel links, private
+workspace disks, lifecycle and cleanup. API and worker processes remain
+unprivileged. The guest supervisor accepts only fixed process types from the
+host and starts all application workloads as UID/GID 1000. Existing agent and
+helper protocols run over the established vsock connection.
+
+Firecracker guests have no NIC. A guest loopback proxy forwards through vsock to
+a per-VM host proxy, which enforces the same public-host HTTP/HTTPS allowlist.
+Empty policies create no egress listener. No TAP, NAT or firewall changes are
+required. Stop/start retains the ext4 workspace; destroy removes it. On host
+manager restart, surviving VM cgroups are stopped before serving requests.
+Graceful stop confirms a bounded guest sync before terminating the cgroup;
+cancellation and timeout/output-limit containment terminate immediately. File
+mutations sync their data and parent directories, and the workspace drive honors
+flush requests with writeback caching. The per-VM host egress proxy shares the
+VM's CPU/memory cgroup. Guest helpers remain unprivileged; the small supervisor
+and host manager are trusted infrastructure.
+
+See [Firecracker runtime](docs/firecracker-runtime.md) for artifact builds,
+security boundaries, operational requirements and opt-in integration tests.
+
 ## Windows and Ubuntu Docker topology
 
 This workstation has two independent Docker daemons and image stores:
@@ -150,9 +181,12 @@ flowchart TB
   end
   subgraph Ubuntu["Ubuntu WSL"]
     Backend["Node API :3001 and worker"]
-    Native["Native Docker daemon /var/run/docker.sock"]
+    Native["Native Docker daemon /run/zlayer-docker.sock"]
     Sandboxes["Kata-backed sandbox containers"]
+    Manager["Firecracker host manager /run/zlayer-firecracker/manager.sock"]
+    MicroVMs["Firecracker VMs: jailer, vsock, ext4 workspace"]
     Backend --> Native --> Sandboxes
+    Backend --> Manager --> MicroVMs
   end
   Web -->|"REST / SSE"| Backend
   Backend -->|"Configured database and Redis endpoints"| Data
@@ -161,9 +195,20 @@ flowchart TB
 `bun run dev:backend:wsl` starts API and worker inside Ubuntu using Linux Node and
 the installed Linux esbuild executable for `tsx`. Both read the same root `.env`
 and use the native Unix Docker socket. The web app can run separately on Windows.
-The launcher does not start the optional remote MCP server or initialize databases.
+The launcher does not start the Firecracker host service, optional remote MCP
+server, PostgreSQL or Redis, and does not initialize databases. The host manager
+runs separately as `zlayer-firecracker.service`. Its socket permissions use the
+trusted API/worker Linux group configured by `FIRECRACKER_SOCKET_GID`.
 
-`bun run sandbox:build:wsl` builds into Ubuntu's native Docker image store.
+The startup banner reports spawned processes, not API/worker readiness. Cold
+module loading through Windows-backed `/mnt/c` can delay `tsx --watch`; this is
+separate from guest boot or helper execution. A Linux checkout with Linux
+dependencies avoids that filesystem boundary. `/health/ready` checks database
+and Redis availability; `/v1/workers/health` reports active worker heartbeats.
+
+`bun run sandbox:build:wsl` builds into Ubuntu's native Docker image store. The workstation uses the `zlayer-kata` CLI
+context and `/run/zlayer-docker.sock`, avoiding Docker Desktop's default-socket
+replacement.
 `bun run sandbox:build` uses the current Docker CLI context; from Windows that is
 normally Docker Desktop. Images can be moved using `docker save` and `docker load`,
 but the stores do not synchronize automatically. A Docker CLI context does not
@@ -173,7 +218,29 @@ All application configuration remains in the ignored root `.env`, with only the
 root `.env.example` template committed. Injected variables take precedence. The
 browser reads only explicitly public `NEXT_PUBLIC_*` values. See
 [Kata setup](docs/kata-runtime.md) for commands and host prerequisites. Production
-uses a Linux Docker host with KVM and Kata; it does not require WSL.
+uses Linux hosts with KVM and the selected runtime services; it does not require WSL.
+
+## Sandbox API and response contract
+
+`POST /v1/sandboxes` accepts `type: "KATA" | "FIRECRACKER"`, defaulting to
+`KATA`. Creation validation is shared by route schema generation and handler
+parsing. Memory is an integer from 512 to 2048 MB; CPU is 0.25?2 for Kata and
+1 or 2 whole vCPUs for Firecracker. The selected type is stored alongside the
+provider, resource ID and image label. Existing nullable type values are treated
+as Kata by the web response schema.
+
+Fastify serializes responses through the explicit allowlist in
+`apps/http/src/lib/response-schema.ts`. Fields must be declared there to reach
+clients: returning a Drizzle row alone does not expose every property. Sandbox
+list, create, detail and lifecycle responses include the `type` enum. The web
+app validates these responses with `sandboxSchema` before accepting them into
+query state. An omitted type can therefore reject a successful creation response
+while the underlying sandbox is already running.
+
+The response regression test sends both provider types and a nullable legacy
+value through actual Fastify serialization, then parses the list and creation
+responses with the web schema. Response-only changes require an API reload and
+page refresh, not rebuilding guest images or recreating sandboxes.
 
 ## State and events
 

@@ -5,12 +5,9 @@ import type { SandboxService } from "./sandbox.service";
 import { readPage, sendPage } from "../../lib/pagination";
 import { authorize } from "../platform/authorization";
 
+import { createSandboxSchema } from "./sandbox.validation";
+
 const params = z.object({ id: z.string().min(1).max(100) });
-const memoryMb = z
-  .number()
-  .int()
-  .max(2048)
-  .default(512);
 export function registerSandboxRoutes(
   app: FastifyInstance,
   service: SandboxService,
@@ -35,36 +32,12 @@ export function registerSandboxRoutes(
     "/sandboxes",
     {
       schema: {
-        body: bodySchema(
-          z.object({
-            name: z
-              .string()
-              .trim()
-              .min(1)
-              .max(40)
-              .regex(/^[a-zA-Z0-9_-]+$/)
-              .default("sandbox"),
-            memoryMb,
-            cpu: z.number().min(0.25).max(2).default(1),
-          }),
-        ),
+        body: bodySchema(createSandboxSchema),
       },
     },
     async (request, reply) => {
       authorize(request, "sandbox.write");
-      const input = z
-        .object({
-          name: z
-            .string()
-            .trim()
-            .min(1)
-            .max(40)
-            .regex(/^[a-zA-Z0-9_-]+$/)
-            .default("sandbox"),
-          memoryMb,
-          cpu: z.number().min(0.25).max(2).default(1),
-        })
-        .parse(request.body);
+      const input = createSandboxSchema.parse(request.body);
       return reply
         .code(201)
         .send(await service.create(request.user.organizationId, input));

@@ -1,12 +1,12 @@
 # Zlayer
 
-An agentic sandbox control plane for running autonomous AI agents inside Kata-backed Docker sandboxes with host-brokered LLM calls, policy-enforced tool execution, resumable event streaming, and an organization-scoped workspace UI.
+An agentic sandbox control plane for running autonomous AI agents inside selectable Kata or Firecracker sandboxes with host-brokered LLM calls, policy-enforced tool execution, resumable event streaming, and an organization-scoped workspace UI.
 
 ---
 
 ## Key Capabilities
 
-- **Isolated Sandbox Execution** — Docker selects the host-registered `kata` runtime to run each sandbox with a guest Linux kernel. The credential-free agent loop (`@repo/agent-runner`) and helpers run as `1000:1000` in `/workspace`; the creation API and UI require at least 512 MB for Kata.
+- **Isolated Sandbox Execution** — Docker selects the host-registered `kata` runtime to run each sandbox with a guest Linux kernel. The credential-free agent loop (`@repo/agent-runner`) and helpers run as `1000:1000` in `/workspace`; the creation API and UI require at least 512 MB. Firecracker is available as a second sandbox type through a dedicated Linux host manager.
 - **Host-Brokered Security Model** — Model provider keys remain on the worker. The runner requests model generations, tool calls, and checkpoints over a private `stdin`/`stdout` RPC channel (`agentChannel`), and the worker checks authorization. Secrets explicitly passed to an approved tool remain accessible to that tool inside the sandbox.
 - **Multi-Provider Model Gateway** — Supports **Anthropic**, **OpenAI**, **DeepSeek**, and **OpenRouter** with per-organization encrypted credentials, model aliases, explicit fallback order, and token/iteration budget enforcement.
 - **Governance, Policies & Approvals** — Scoped API keys, RBAC (`owner`, `admin`, `developer`, `viewer`), execution policies, one-use approval gates, usage metering, and durable audit logs.
@@ -42,7 +42,10 @@ flowchart TB
     subgraph Execution["Worker & Isolated Sandboxes"]
         Worker["apps/worker\nBullMQ Worker + Outbox Publisher\n& Agent Supervisor"]
         Runtime["packages/agent-runtime\nModelRouter (Anthropic, OpenAI,\nDeepSeek, OpenRouter) & Tool Policy"]
-        subgraph Container["Kata VM / guest kernel + Docker sandbox (packages/sandbox)"]
+        Router["SandboxRouter: per-sandbox type"]
+        Kata["DockerSandboxProvider / Docker + Kata"]
+        FC["FirecrackerSandboxProvider / local host manager"]
+        subgraph Container["Selected sandbox: Kata or Firecracker guest"]
             Runner["packages/agent-runner\nCredential-free Agent Loop\n(/opt/zlayer/agent-runner.mjs)"]
             Helpers["Sandbox Helpers\nPython: filesystem.py\nNode: helper.mjs (shell / browser / MCP)"]
         end
@@ -58,15 +61,20 @@ flowchart TB
     HTTP -->|"Transactions + Outbox"| PG
     HTTP -->|"Enqueue Jobs / Rate Limit"| Redis
     HTTP -->|"Signed URLs / Metadata"| R2
-    HTTP -->|"Lifecycle / Direct Exec"| Container
+    HTTP -->|"Lifecycle / Direct Exec"| Router
+    Worker --> Router
+    Router -->|"KATA (default)"| Kata
+    Router -->|"FIRECRACKER"| FC
+    Kata -->|"Docker exec"| Container
+    FC -->|"Jailer + guest supervisor / vsock"| Container
 
     Worker -->|"Poll Outbox / Persist Events & Usage"| PG
     Worker -->|"Consume agent-runs &\nshell-executions"| Redis
     Worker -->|"Upload Artifacts"| R2
     Worker --> Runtime
-    Worker <-->|"Docker Exec stdin/stdout\nagentChannel RPC"| Runner
+    Worker <-->|"Docker exec or vsock\nagentChannel RPC"| Runner
     Runner -->|"Tool request over private RPC"| Worker
-    Worker -->|"Authorize, then Docker exec"| Helpers
+    Worker -->|"Authorize, then provider transport"| Helpers
 
     HTTP -.-> Obs
     Worker -.-> Obs
@@ -82,19 +90,19 @@ sequenceDiagram
     participant DB as PostgreSQL (@repo/db)
     participant Redis as Redis (BullMQ)
     participant Worker as apps/worker (Supervisor)
-    participant Sandbox as Kata Sandbox (agent-runner)
+    participant Sandbox as Selected Sandbox (agent-runner)
     participant LLM as LLM Provider (Anthropic / OpenAI / DeepSeek / OpenRouter)
 
     User->>API: POST /v1/runs (task, sandboxId, sessionId)
     API->>DB: Tx: reserve quota + insert run + initial event + outbox
-    API-->>User: 201 Created (runId)
+    API-->>User: 202 Accepted (runId)
 
     Worker->>DB: Outbox publisher polls pending records
     Worker->>Redis: Enqueue job (agent-runs)
     Worker->>Redis: Claim job
     Worker->>DB: Acquire run lease and serialize sandbox agent claims
 
-    Worker->>Sandbox: docker exec node /opt/zlayer/agent-runner.mjs
+    Worker->>Sandbox: Provider launches agent-runner (Docker exec or vsock)
     Worker->>Sandbox: agentChannel.request("run", launch)
 
     loop Agent Reasoning Loop (inside Sandbox)
@@ -122,6 +130,22 @@ sequenceDiagram
 ```
 
 ---
+
+### Sandbox providers
+
+Choose **Kata (Docker)** or **Firecracker** when creating a sandbox. The API accepts
+`type: "KATA" | "FIRECRACKER"`, defaulting to Kata. Both types can coexist;
+existing sandboxes retain their provider. Firecracker requires 1 or 2 whole vCPUs.
+
+The Firecracker backend uses a local Linux host manager, jailer, a read-only
+ext4 rootfs and a guest supervisor over vsock. Model credentials stay on the
+worker. Approved HTTP/HTTPS egress uses a per-VM allowlist proxy over vsock;
+there is no guest NIC or host firewall modification. Its 256 MB workspace
+survives stop/start and is deleted on sandbox destruction.
+
+See [Firecracker setup, lifecycle and verification](docs/firecracker-runtime.md).
+The existing Docker + Kata setup remains available. Apply the sandbox type schema
+change separately; builds, startup and smoke tests do not change the database.
 
 ### Sandbox Image and Helper Processes
 
@@ -162,7 +186,7 @@ changes. See [architecture](ARCHITECTURE.md#sandbox-image-and-execution-protocol
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `@repo/agent-runner`      | Credential-free agent loop running inside the sandbox container over `agentChannel`.                                      |
 | `@repo/agent-runtime`     | `ModelRouter`, provider adapters (Anthropic, OpenAI, DeepSeek, OpenRouter), tool registry, and MCP client bridging.       |
-| `@repo/sandbox`           | `DockerSandboxProvider` for container lifecycle, image verification, bounded exec, and `packages/sandbox/image` helpers.  |
+| `@repo/sandbox`           | Per-sandbox routing, Docker/Kata provider, Firecracker host manager and guest transports.                                 |
 | `@repo/db`                | Drizzle ORM schema, PostgreSQL connection pool, AES encryption for secrets/keys, approvals, events, and usage settlement. |
 | `@repo/storage`           | Private Cloudflare R2 object uploads, checksums, metadata, and signed download URLs.                                      |
 | `@repo/sdk`               | Typed TypeScript client (`AgentPlatformClient`) with automatic retries and resumable `Last-Event-ID` SSE streaming.       |
@@ -218,7 +242,8 @@ Key variables in `.env`:
 - `GOOGLE_CLIENT_ID` & `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — Optional Google OAuth sign-in.
 - `ENCRYPTION_KEY` — Required for encrypting organization provider keys and secrets.
 - `SANDBOX_IMAGE` — Docker sandbox image (default `zlayer-sandbox:local`).
-- `SANDBOX_RUNTIME=kata` / `DOCKER_SOCKET=/var/run/docker.sock` — Native Linux Docker runtime and socket for the Ubuntu backend.
+- `SANDBOX_RUNTIME=kata` / `DOCKER_SOCKET=/run/zlayer-docker.sock` — Native Linux Docker runtime and socket for the Ubuntu backend.
+- `FIRECRACKER_SOCKET=/run/zlayer-firecracker/manager.sock` and `FIRECRACKER_SOCKET_GID` configure access to the optional Linux host manager.
 - `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` — Private Cloudflare R2 storage for artifacts.
 
 See [ENVIRONMENT.md](ENVIRONMENT.md) for full configuration and sandbox image build instructions.
@@ -235,6 +260,12 @@ bun run db:push
 
 ### 4. Build the sandbox image
 
+The configured workstation already has the Kata image and Firecracker rootfs.
+Starting the app or fixing API/UI response schemas does not require rebuilding
+those artifacts. Rebuild after changing guest code or dependencies, then create
+fresh sandboxes. Firecracker rootfs/host builds have separate commands in its
+[setup guide](docs/firecracker-runtime.md).
+
 For this Windows/Ubuntu setup, build directly into the Docker engine used by the backend:
 
 ```powershell
@@ -248,6 +279,16 @@ bun run sandbox:build
 ```
 
 ### 5. Run the development stack
+
+On this configured workstation, ensure Docker Desktop is running for PostgreSQL
+and Redis, and start the Ubuntu host services:
+
+```powershell
+wsl -d Ubuntu --exec sudo systemctl start docker zlayer-firecracker
+```
+
+The Firecracker service is required only for Firecracker sandboxes. First-time
+installation is covered in the [Firecracker guide](docs/firecracker-runtime.md).
 
 From two Windows terminals in the repository root:
 
@@ -263,6 +304,13 @@ Do not also run `bun run dev` in Windows: that starts another backend targeting
 Docker Desktop's named pipe. The WSL launcher uses the existing source checkout
 and root `.env`; it does not initialize databases. On a fully Linux development
 host with its tools and Docker configured, use `bun run dev` normally.
+
+The launcher's ?Starting API and worker? message confirms process launch, not
+readiness. Wait for the API listening log; `http://localhost:3001/health/ready`
+checks database and Redis readiness. Cold `tsx --watch` startup can be slow when
+the source and dependencies live under `/mnt/c`. Keeping a Linux checkout and
+Linux dependencies in Ubuntu's filesystem avoids that cross-filesystem loading.
+Do not reuse Linux-installed dependencies for the Windows web process.
 
 - **Web Control Plane:** `http://localhost:3000`
 - **HTTP API:** `http://localhost:3001`
@@ -287,6 +335,8 @@ application databases. Run them on the configured Linux sandbox host:
 ```sh
 bun run sandbox:smoke-image  # Files, path restrictions, shell, MCP stdio and Chromium
 bun run sandbox:smoke-agent  # Agent broker, approvals/resume, cancellation and cleanup
+bun run sandbox:smoke-firecracker  # Image and agent checks against Firecracker
+node --import tsx apps/worker/src/smoke-firecracker-lifecycle.ts  # Persistence, egress and resource limits
 ```
 
 The [Kata guide](docs/kata-runtime.md) includes the PowerShell-to-WSL equivalents.
@@ -300,6 +350,7 @@ The [Kata guide](docs/kata-runtime.md) includes the PowerShell-to-WSL equivalent
 - [SECURITY.md](SECURITY.md) — Security boundaries, trust model, and known limitations
 - [docs/sandbox-agents.md](docs/sandbox-agents.md) — In-sandbox agent runner & host supervisor protocol
 - [docs/kata-runtime.md](docs/kata-runtime.md) — Kata host setup, separate Docker engines, image builds and live checks
+- [docs/firecracker-runtime.md](docs/firecracker-runtime.md) ? Firecracker builds, host service, networking, lifecycle and recovery
 - [docs/mcp-architecture.md](docs/mcp-architecture.md) — Remote MCP server architecture
 - [apps/http/README.md](apps/http/README.md) — HTTP API endpoints and OpenAPI contract
 - [packages/sdk/README.md](packages/sdk/README.md) — TypeScript SDK usage

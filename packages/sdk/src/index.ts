@@ -110,6 +110,7 @@ export type McpConfiguration =
       secretNames?: string[];
     };
 export interface Sandbox {
+  type: "KATA" | "FIRECRACKER";
   id: string;
   name: string;
   status: string;
@@ -269,7 +270,12 @@ export class AgentPlatformClient {
     this.options.token = undefined;
   }
   createSandbox(
-    input: { name?: string; memoryMb?: number; cpu?: number },
+    input: {
+      type?: "KATA" | "FIRECRACKER";
+      name?: string;
+      memoryMb?: number;
+      cpu?: number;
+    },
     options?: RequestOptions,
   ) {
     return this.post<Sandbox>("/v1/sandboxes", input, options);

@@ -56,7 +56,6 @@ const input =
     : JSON.parse(Buffer.from(process.argv[2], "base64url").toString());
 const root = "/workspace";
 const control = "/tmp/.zlayer";
-await mkdir(control, { recursive: true, mode: 0o700 });
 if (input.op === "proxy") {
   const allowed = new Set(input.hosts.map((host) => host.toLowerCase()));
   const server = http.createServer(async (request, response) => {
@@ -120,9 +119,15 @@ if (input.op === "proxy") {
       socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
     }
   });
-  server.listen(8080, "0.0.0.0");
+  server.listen(input.port ?? 8080, input.bind ?? "0.0.0.0", () => {
+    if (input.reportReady)
+      process.stdout.write(
+        JSON.stringify({ port: server.address().port }) + "\n",
+      );
+  });
   await new Promise(() => {});
 }
+await mkdir(control, { recursive: true, mode: 0o700 });
 const serviceSocket = `${control}/service.sock`;
 async function serviceRequest(body) {
   return new Promise((resolve, reject) => {

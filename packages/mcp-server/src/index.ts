@@ -97,7 +97,23 @@ export function createPlatformMcpServer(options: {
   tool(
     "sandbox.create",
     "Create an organization sandbox",
-    z.strictObject({ name: z.string().max(100).optional() }),
+    z
+      .strictObject({
+        type: z.enum(["KATA", "FIRECRACKER"]).optional(),
+        name: z
+          .string()
+          .regex(/^[a-zA-Z0-9_-]{1,40}$/)
+          .optional(),
+        memoryMb: z.number().int().min(512).max(2048).optional(),
+        cpu: z.number().min(0.25).max(2).optional(),
+      })
+      .refine(
+        (input) =>
+          input.type !== "FIRECRACKER" ||
+          input.cpu === undefined ||
+          Number.isInteger(input.cpu),
+        { message: "Firecracker requires whole CPU cores.", path: ["cpu"] },
+      ),
     ["sandbox.write"],
     (input, api) => api.createSandbox(input),
   );

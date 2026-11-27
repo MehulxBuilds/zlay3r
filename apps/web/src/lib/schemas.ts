@@ -26,6 +26,10 @@ export const memberSchema = z.object({
   role: roleSchema,
 });
 export const sandboxSchema = z.object({
+  type: z
+    .enum(["KATA", "FIRECRACKER"])
+    .nullable()
+    .transform((type) => type ?? "KATA"),
   id: z.string(),
   name: z.string(),
   status: z.string(),

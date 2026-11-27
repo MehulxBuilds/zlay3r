@@ -2,7 +2,7 @@ import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import { db, pool, sql } from "@repo/db";
 import { server_env as env } from "@repo/env";
-import { DockerSandboxProvider } from "@repo/sandbox";
+import { createSandboxProvider } from "@repo/sandbox";
 import type { RunJob } from "@repo/shared";
 import { buildApp } from "./app";
 import { authRepository } from "./modules/auth/auth.repository";
@@ -23,7 +23,7 @@ import { startTelemetry, stopTelemetry } from "@repo/observability";
 startTelemetry("zlayer-http");
 const redis = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: 1 });
 const queue = new Queue<RunJob>("agent-runs", { connection: redis });
-const provider = new DockerSandboxProvider();
+const provider = createSandboxProvider();
 const sandboxes = createSandboxService(provider);
 const auth = createAuthService(authRepository, verifyGoogle);
 const app = await buildApp({
