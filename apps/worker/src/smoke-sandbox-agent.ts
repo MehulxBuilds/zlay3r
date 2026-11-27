@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { DockerSandboxProvider } from "@repo/sandbox";
+import {
+  DockerSandboxProvider,
+  FirecrackerSandboxProvider,
+} from "@repo/sandbox";
 import { ToolRegistry, type ModelGateway } from "@repo/agent-runtime/core";
 import { runSandboxAgent } from "./agent-supervisor";
 import type { AgentLaunch } from "@repo/agent-runner/contracts";
 
-// Explicit opt-in Docker check. No DB, queues, provider API or user resources.
-const provider = new DockerSandboxProvider();
+// Explicit opt-in sandbox check. No DB, queues, provider API or user resources.
+const provider = process.argv.includes("--firecracker")
+  ? new FirecrackerSandboxProvider()
+  : new DockerSandboxProvider();
 const { resourceId } = await provider.create({
   name: `agent-smoke-${randomUUID().slice(0, 8)}`,
   memoryMb: 512,
@@ -158,7 +163,7 @@ try {
     false,
   );
   console.log(
-    "Docker agent smoke passed: non-root runner, network disabled, real shell/file operation, host model broker, approval/resume, and cleanup.",
+    "Sandbox agent smoke passed: non-root runner, network disabled, real shell/file operation, host model broker, approval/resume, and cleanup.",
   );
 } finally {
   await provider.destroy(resourceId);

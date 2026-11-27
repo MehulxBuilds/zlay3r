@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { DockerSandboxProvider } from "@repo/sandbox";
+import {
+  DockerSandboxProvider,
+  FirecrackerSandboxProvider,
+} from "@repo/sandbox";
 
 // Explicit opt-in integration test. Only this temporary sandbox is modified.
-const provider = new DockerSandboxProvider();
+const provider = process.argv.includes("--firecracker")
+  ? new FirecrackerSandboxProvider()
+  : new DockerSandboxProvider();
 const { resourceId } = await provider.create({
   name: `image-smoke-${randomUUID().slice(0, 8)}`,
   memoryMb: 1024,

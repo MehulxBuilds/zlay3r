@@ -238,6 +238,8 @@
         "@repo/observability": "workspace:*",
         "@repo/shared": "workspace:*",
         "dockerode": "4.0.7",
+        "ipaddr.js": "2.5.0",
+        "zod": "4.3.6",
       },
       "devDependencies": {
         "@repo/typescript-config": "workspace:*",

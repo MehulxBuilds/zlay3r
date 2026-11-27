@@ -49,6 +49,7 @@ def main(request):
       raise ValueError("WORKSPACE_ROOT_PROTECTED")
     if operation == "mkdir":
       os.mkdir(name, mode=0o700, dir_fd=descriptor)
+      os.fsync(descriptor)
       return {"created": True}
     if operation == "write":
       data = base64.b64decode(request["data"], validate=True)
@@ -60,6 +61,9 @@ def main(request):
           raise ValueError("NOT_REGULAR_FILE")
         stream.truncate(0)
         stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+      os.fsync(descriptor)
       return {"size": len(data)}
     info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
     if stat.S_ISLNK(info.st_mode):
@@ -90,6 +94,7 @@ def main(request):
         os.rmdir(name, dir_fd=descriptor)
       else:
         os.unlink(name, dir_fd=descriptor)
+      os.fsync(descriptor)
       return {"deleted": True}
     if operation == "move":
       target, destination = parent(request["destination"])
@@ -97,6 +102,8 @@ def main(request):
         if destination == ".":
           raise ValueError("WORKSPACE_ROOT_PROTECTED")
         os.rename(name, destination, src_dir_fd=descriptor, dst_dir_fd=target)
+        os.fsync(target)
+        os.fsync(descriptor)
         return {"moved": True}
       finally:
         os.close(target)

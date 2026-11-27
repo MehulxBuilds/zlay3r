@@ -40,6 +40,7 @@ const event = object(
 const sandbox = object(
   {
     id: text,
+    type: nullable({ type: "string", enum: ["KATA", "FIRECRACKER"] }),
     organizationId: text,
     name: text,
     provider: text,

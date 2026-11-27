@@ -16,6 +16,7 @@ export type RunStatus =
   | "LIMIT_REACHED";
 
 export interface SandboxDto {
+  type: "KATA" | "FIRECRACKER";
   id: string;
   name: string;
   status: SandboxStatus;

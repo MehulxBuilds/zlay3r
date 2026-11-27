@@ -1,0 +1,23 @@
+[Unit]
+Description=ZLayer Firecracker host manager
+After=local-fs.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/zlayer-firecracker
+# Replace this path with the one repository-root .env on your Linux host.
+EnvironmentFile=/absolute/path/to/zlayer/.env
+ExecStart=/usr/local/bin/node /opt/zlayer-firecracker/host.mjs
+RuntimeDirectory=zlayer-firecracker
+RuntimeDirectoryMode=0750
+UMask=0077
+Delegate=yes
+KillMode=control-group
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=120
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

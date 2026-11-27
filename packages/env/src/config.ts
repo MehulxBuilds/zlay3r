@@ -27,6 +27,42 @@ export const ServerEnvSchema = z.object({
     .string()
     .regex(/^[a-zA-Z0-9_-]{1,40}$/)
     .default("local"),
+  FIRECRACKER_SOCKET: z
+    .string()
+    .startsWith("/")
+    .default("/run/zlayer-firecracker/manager.sock"),
+  FIRECRACKER_BINARY: z
+    .string()
+    .startsWith("/")
+    .default("/usr/local/bin/firecracker"),
+  FIRECRACKER_JAILER: z
+    .string()
+    .startsWith("/")
+    .default("/usr/local/bin/jailer"),
+  FIRECRACKER_KERNEL: z
+    .string()
+    .startsWith("/")
+    .default("/opt/zlayer-firecracker/vmlinux"),
+  FIRECRACKER_ROOTFS: z
+    .string()
+    .startsWith("/")
+    .default("/opt/zlayer-firecracker/rootfs.ext4"),
+  FIRECRACKER_HELPER: z
+    .string()
+    .startsWith("/")
+    .default("/opt/zlayer-firecracker/helper.mjs"),
+  FIRECRACKER_STATE_DIR: z
+    .string()
+    .startsWith("/")
+    .default("/var/lib/zlayer-firecracker"),
+  FIRECRACKER_SOCKET_GID: z.coerce.number().int().min(0).default(0),
+  FIRECRACKER_UID_BASE: z.coerce
+    .number()
+    .int()
+    .min(10000)
+    .max(60000)
+    .default(40000),
+  FIRECRACKER_MAX_VMS: z.coerce.number().int().min(1).max(1000).default(32),
   SANDBOX_SECCOMP: z.string().default(""),
   ENCRYPTION_KEY: z.string().default(""),
   R2_ACCOUNT_ID: z.string().default(""),

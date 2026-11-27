@@ -72,3 +72,14 @@ Match the tag to `SANDBOX_IMAGE` if customized. Existing containers retain their
 image; create a new sandbox to use the runner. Docker
 connection, unsupported engine and missing-image errors return actionable HTTP 503
 responses instead of a generic internal error.
+
+## Optional Firecracker provider
+
+`FIRECRACKER_SOCKET` selects the local host-manager socket. Host-only settings
+include `FIRECRACKER_BINARY`, `FIRECRACKER_JAILER`, `FIRECRACKER_KERNEL`,
+`FIRECRACKER_ROOTFS`, `FIRECRACKER_HELPER`, `FIRECRACKER_STATE_DIR`,
+`FIRECRACKER_SOCKET_GID`, `FIRECRACKER_UID_BASE`, and `FIRECRACKER_MAX_VMS`.
+Keep their configuration in the same root `.env`; the systemd host service reads
+that file through `EnvironmentFile`. Set the socket GID to a trusted API/worker
+Linux group. A global provider switch is not used: select `type` per sandbox.
+See [Firecracker runtime](docs/firecracker-runtime.md).

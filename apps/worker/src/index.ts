@@ -36,7 +36,7 @@ import {
   type ModelUsage,
 } from "@repo/db";
 import { server_env as env } from "@repo/env";
-import { DockerSandboxProvider } from "@repo/sandbox";
+import { createSandboxProvider } from "@repo/sandbox";
 import {
   ModelRouter,
   AnthropicProvider,
@@ -68,7 +68,7 @@ const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const publisherConnection = new IORedis(env.REDIS_URL, {
   maxRetriesPerRequest: 1,
 });
-const provider = new DockerSandboxProvider();
+const provider = createSandboxProvider();
 const owner = randomUUID();
 const queues = new Map(
   ["agent-runs", "shell-executions"].map((name) => [
@@ -606,13 +606,11 @@ const worker = new Worker<RunJob>(
                       if (!current) throw new Error("LEASE_LOST");
                       if (current.cancelRequestedAt)
                         throw new Error("RUN_CANCELLED");
-                      await tx
-                        .insert(checkpoint)
-                        .values({
-                          runId,
-                          state: { messages, usage },
-                          sequence: messages?.length ?? 0,
-                        });
+                      await tx.insert(checkpoint).values({
+                        runId,
+                        state: { messages, usage },
+                        sequence: messages?.length ?? 0,
+                      });
                     });
                   },
                   async authorize(tool, args) {

@@ -12,6 +12,7 @@ import {
   execution,
   appendPlatformEventTx,
 } from "@repo/db";
+import type { CreateSandboxInput } from "./sandbox.validation";
 import type { SandboxProvider } from "@repo/sandbox";
 import { HttpError } from "../../lib/errors";
 import { server_env as env } from "@repo/env";
@@ -51,16 +52,17 @@ export function createSandboxService(provider: SandboxProvider) {
         .orderBy(desc(sandbox.createdAt), desc(sandbox.id))
         .limit(options.limit);
     },
-    async create(
-      organizationId: string,
-      input: { name: string; memoryMb: number; cpu: number },
-    ) {
+    async create(organizationId: string, input: CreateSandboxInput) {
       const [record] = await db
         .insert(sandbox)
         .values({
           ...input,
           organizationId,
-          image: env.SANDBOX_IMAGE,
+          provider: input.type === "FIRECRACKER" ? "firecracker" : "docker",
+          image:
+            input.type === "FIRECRACKER"
+              ? "firecracker-rootfs:local"
+              : env.SANDBOX_IMAGE,
           expiresAt: new Date(Date.now() + 3600000),
         })
         .returning();

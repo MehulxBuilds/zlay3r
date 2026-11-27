@@ -7,13 +7,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "build:host": "bun build src/firecracker/host-main.ts --target node --outfile dist/host.mjs && bun build image/helper.mjs --target node --outfile dist/helper.mjs"
   },
   "dependencies": {
     "@repo/env": "workspace:*",
     "@repo/observability": "workspace:*",
     "@repo/shared": "workspace:*",
-    "dockerode": "4.0.7"
+    "dockerode": "4.0.7",
+    "zod": "4.3.6",
+    "ipaddr.js": "2.5.0"
   },
   "devDependencies": {
     "@types/node": "22.19.11",

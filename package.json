@@ -16,7 +16,10 @@
     "sandbox:build": "docker build -f packages/sandbox/image/Dockerfile -t zlayer-sandbox:local .",
     "sandbox:build:wsl": "wsl -d Ubuntu --exec docker build -f packages/sandbox/image/Dockerfile -t zlayer-sandbox:local .",
     "sandbox:smoke-agent": "tsx apps/worker/src/smoke-sandbox-agent.ts",
-    "sandbox:smoke-image": "tsx apps/worker/src/smoke-sandbox-image.ts"
+    "sandbox:smoke-image": "tsx apps/worker/src/smoke-sandbox-image.ts",
+    "firecracker:build-host": "bun run --cwd packages/sandbox build:host",
+    "firecracker:build-rootfs:wsl": "wsl -d Ubuntu -u root --exec sh scripts/build-firecracker-rootfs.sh",
+    "sandbox:smoke-firecracker": "tsx apps/worker/src/smoke-sandbox-image.ts --firecracker && tsx apps/worker/src/smoke-sandbox-agent.ts --firecracker"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.8",

@@ -56,6 +56,11 @@ export const runStatusEnum = pgEnum("run_status", [
   "LIMIT_REACHED",
 ]);
 
+export const sandboxTypeEnum = pgEnum("sandbox_enum", [
+  "KATA",
+  "FIRECRACKER"
+]);
+
 export const organization = pgTable("organization", {
   id: text("id").primaryKey().$defaultFn(randomUUID),
   name: text("name").notNull(),
@@ -103,6 +108,7 @@ export const sandbox = pgTable(
     organizationId: text("organization_id")
       .notNull()
       .references(() => organization.id),
+    type: sandboxTypeEnum("type").default("KATA"),
     name: text("name").notNull(),
     provider: text("provider").default("docker").notNull(),
     resourceId: text("resource_id"),
