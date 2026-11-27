@@ -62,6 +62,10 @@ export const runSchema = z.object({
   createdAt: z.string().optional(),
 });
 export const sessionSchema = z.object({
+  approvalType: z
+    .enum(["APPROVE_FOR_ME", "ASK_FOR_APPROVAL"])
+    .nullable()
+    .transform((value) => value ?? "ASK_FOR_APPROVAL"),
   id: z.string(),
   title: z.string(),
   createdAt: z.string().optional(),

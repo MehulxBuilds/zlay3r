@@ -72,6 +72,7 @@ export interface OrganizationDto {
   role: string;
 }
 export interface SessionDto {
+  approvalType: "APPROVE_FOR_ME" | "ASK_FOR_APPROVAL" | null;
   id: string;
   title: string;
   createdAt: string;

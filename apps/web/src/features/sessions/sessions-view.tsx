@@ -7,12 +7,14 @@ import {
   useSession,
   useCreateSession,
   useDeleteSession,
+  useUpdateSession,
   createSessionSchema,
 } from "@repo/web/hooks/api/sessions";
 import {
   ActionForm,
   CreateDialog,
   Field,
+  ChoiceSelect,
 } from "@repo/web/components/shared/forms";
 import {
   ResourceTable,
@@ -25,6 +27,7 @@ import {
   LoadingCards,
   EmptyState,
 } from "@repo/web/components/shared/feedback";
+import type { Session } from "@repo/web/lib/schemas";
 import { dateLabel, display } from "@repo/web/lib/format";
 export function SessionsView({ writable }: { writable: boolean }) {
   const query = useSessions();
@@ -49,9 +52,7 @@ export function SessionsView({ writable }: { writable: boolean }) {
                   close();
                 }}
               >
-                <Field label="Session name">
-                  <Input name="title" required placeholder="My next project" />
-                </Field>
+                <SessionFields />
               </ActionForm>
             )}
           </CreateDialog>
@@ -77,6 +78,13 @@ export function SessionsView({ writable }: { writable: boolean }) {
               </div>
             ),
           },
+          {
+            label: "Approvals",
+            cell: (session) =>
+              session.approvalType === "APPROVE_FOR_ME"
+                ? "Approve for me"
+                : "Ask for approval",
+          },
           { label: "Created", cell: (session) => dateLabel(session.createdAt) },
         ]}
         actions={(session) => (
@@ -89,6 +97,7 @@ export function SessionsView({ writable }: { writable: boolean }) {
               Open
               <ArrowUpRight />
             </Button>
+            {writable && <EditSession session={session} />}
             {writable && (
               <ConfirmAction
                 title="Delete this session?"
@@ -155,5 +164,58 @@ function SessionDetail({ id }: { id: string }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function SessionFields({ session }: { session?: Session }) {
+  return (
+    <>
+      <Field label="Session name">
+        <Input
+          name="title"
+          required
+          maxLength={200}
+          defaultValue={session?.title}
+          placeholder="My next project"
+        />
+      </Field>
+      <Field
+        label="Tool approvals"
+        hint="Approve for me lets agent runs perform permitted actions without asking. Tool permissions and execution limits still apply."
+      >
+        <ChoiceSelect
+          name="approvalType"
+          defaultValue={session?.approvalType ?? "ASK_FOR_APPROVAL"}
+          options={[
+            { value: "ASK_FOR_APPROVAL", label: "Ask for approval" },
+            { value: "APPROVE_FOR_ME", label: "Approve for me" },
+          ]}
+        />
+      </Field>
+    </>
+  );
+}
+function EditSession({ session }: { session: Session }) {
+  const update = useUpdateSession();
+  return (
+    <CreateDialog
+      title="Edit session"
+      label="Edit"
+      description="Update the session name and approval setting. Changes apply to subsequent tool checks; pending approvals still need a decision."
+    >
+      {(close) => (
+        <ActionForm
+          schema={createSessionSchema}
+          pending={update.isPending}
+          submit="Save changes"
+          onSubmit={async (input) => {
+            await update.mutateAsync({ id: session.id, ...input });
+            close();
+          }}
+        >
+          <SessionFields session={session} />
+        </ActionForm>
+      )}
+    </CreateDialog>
   );
 }

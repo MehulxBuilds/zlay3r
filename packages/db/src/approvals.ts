@@ -1,5 +1,10 @@
 import { db } from "./db";
-import { approval, executionPolicy } from "../schema/index";
+import {
+  approval,
+  executionPolicy,
+  agentRun,
+  agentSession,
+} from "../schema/index";
 import { and, eq, sql } from "drizzle-orm";
 import { tokenDigest } from "./security";
 
@@ -25,7 +30,35 @@ export async function evaluateAction(
       !policy.allowedCommands.includes(String(args.command))
     )
       return { allowed: false, reason: "COMMAND_NOT_ALLOWED" };
-    if (options.userApproved || !policy.requireApproval.includes(tool))
+    // Resolve the setting from the run's own organization-scoped session.
+    // It skips consent only; the policy restrictions above still apply.
+    let autoApprove = false;
+    if (runId) {
+      const [session] = await tx
+        .select({ approvalType: agentSession.approvalType })
+        .from(agentRun)
+        .innerJoin(
+          agentSession,
+          and(
+            eq(agentSession.id, agentRun.sessionId),
+            eq(agentSession.organizationId, organizationId),
+          ),
+        )
+        .where(
+          and(
+            eq(agentRun.id, runId),
+            eq(agentRun.sandboxId, sandboxId),
+            eq(agentRun.organizationId, organizationId),
+          ),
+        )
+        .limit(1);
+      autoApprove = session?.approvalType === "APPROVE_FOR_ME";
+    }
+    if (
+      autoApprove ||
+      options.userApproved ||
+      !policy.requireApproval.includes(tool)
+    )
       return { allowed: true };
     const action = { tool, args, sandboxId, runId: runId ?? null };
     const actionHash = tokenDigest(JSON.stringify(action));

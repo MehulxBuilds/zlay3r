@@ -26,7 +26,9 @@ export interface AuthSession {
   token: string;
   expiresAt: string;
 }
+export type ApprovalType = "APPROVE_FOR_ME" | "ASK_FOR_APPROVAL";
 export interface Session extends Resource {
+  approvalType: ApprovalType | null;
   title: string;
   createdAt: string;
   messages?: {
@@ -401,8 +403,20 @@ export class AgentPlatformClient {
       "/v1/sessions",
     );
   }
-  createSession(title: string) {
-    return this.post<Session>("/v1/sessions", { title });
+  createSession(
+    title: string,
+    approvalType: ApprovalType = "ASK_FOR_APPROVAL",
+  ) {
+    return this.post<Session>("/v1/sessions", { title, approvalType });
+  }
+  updateSession(
+    id: string,
+    input: { title?: string; approvalType?: ApprovalType },
+  ) {
+    return this.request<Session>(`/v1/sessions/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
   }
   getSession(id: string) {
     return this.request<Session>(`/v1/sessions/${encodeURIComponent(id)}`);

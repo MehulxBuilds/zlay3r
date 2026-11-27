@@ -61,6 +61,11 @@ export const sandboxTypeEnum = pgEnum("sandbox_enum", [
   "FIRECRACKER"
 ]);
 
+export const approvalTypeEnum = pgEnum("approval_type", [
+  "APPROVE_FOR_ME", // This will not ask for approval ( approval by default )
+  "ASK_FOR_APPROVAL" // This will ask for approval as it does today
+])
+
 export const organization = pgTable("organization", {
   id: text("id").primaryKey().$defaultFn(randomUUID),
   name: text("name").notNull(),
@@ -307,6 +312,7 @@ export const agentSession = pgTable(
     userId: text("user_id").references(() => user.id),
     apiKeyId: text("api_key_id").references(() => apiKey.id),
     title: text("title").notNull(),
+    approvalType: approvalTypeEnum("approval_type").default("ASK_FOR_APPROVAL"),
     createdAt: timestamp("created_at", { mode: "date", precision: 3 })
       .defaultNow()
       .notNull(),

@@ -9,6 +9,7 @@ import {
 } from "./core";
 export const createSessionSchema = z.object({
   title: z.string().trim().min(1).max(200),
+  approvalType: z.enum(["APPROVE_FOR_ME", "ASK_FOR_APPROVAL"]),
 });
 export const useSessions = () =>
   useApiPages("sessions", "/v1/sessions", sessionSchema);
@@ -18,7 +19,7 @@ export const useCreateSession = () =>
   useApiAction(
     "sessions",
     (client, input: z.infer<typeof createSessionSchema>) =>
-      client.createSession(input.title),
+      client.createSession(input.title, input.approvalType),
     sessionSchema,
     "Session created",
   );
@@ -28,4 +29,16 @@ export const useDeleteSession = () =>
     (client, id: string) => client.deleteSession(id),
     noContentSchema,
     "Session deleted",
+  );
+
+export const useUpdateSession = () =>
+  useApiAction(
+    "sessions",
+    (client, input: z.infer<typeof createSessionSchema> & { id: string }) =>
+      client.updateSession(input.id, {
+        title: input.title,
+        approvalType: input.approvalType,
+      }),
+    sessionSchema,
+    "Session updated",
   );

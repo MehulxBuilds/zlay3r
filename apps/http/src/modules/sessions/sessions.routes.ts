@@ -1,6 +1,6 @@
 import { bodySchema } from "../../lib/route-schema";
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { sessionInput, sessionUpdate } from "./sessions.validation";
 import {
   db,
   and,
@@ -53,16 +53,12 @@ export async function registerSessionsRoutes(
     "/sessions",
     {
       schema: {
-        body: bodySchema(
-          z.object({ title: z.string().trim().min(1).max(200) }),
-        ),
+        body: bodySchema(sessionInput),
       },
     },
     async (request, reply) => {
       authorize(request, "sessions.write");
-      const input = z
-        .object({ title: z.string().trim().min(1).max(200) })
-        .parse(request.body);
+      const input = sessionInput.parse(request.body);
       return reply.code(201).send(
         (
           await db
@@ -111,6 +107,27 @@ export async function registerSessionsRoutes(
         .orderBy(desc(agentRun.createdAt)),
     };
   });
+  app.patch(
+    "/sessions/:id",
+    { schema: { body: bodySchema(sessionUpdate) } },
+    async (request) => {
+      authorize(request, "sessions.write");
+      const { id } = idParams.parse(request.params);
+      const input = sessionUpdate.parse(request.body);
+      const [record] = await db
+        .update(agentSession)
+        .set(input)
+        .where(
+          and(
+            eq(agentSession.id, id),
+            eq(agentSession.organizationId, request.user.organizationId),
+          ),
+        )
+        .returning();
+      if (!record) throw new HttpError(404, "SESSION_NOT_FOUND");
+      return record;
+    },
+  );
   app.delete("/sessions/:id", async (request, reply) => {
     authorize(request, "sessions.write");
     const { id } = idParams.parse(request.params);

@@ -93,6 +93,10 @@ const execution = object(
 );
 const session = object(
   {
+    approvalType: nullable({
+      type: "string",
+      enum: ["APPROVE_FOR_ME", "ASK_FOR_APPROVAL"],
+    }),
     id: text,
     organizationId: text,
     userId: nullable(text),
